@@ -1,3 +1,5 @@
+import { BRAND } from "./brand";
+
 /**
  * Canonical product types and categories. Fulfillment adapters map their own
  * catalog entries onto these ids; the shop filters and mockup renderer use them.
@@ -162,5 +164,5 @@ export const AI_TOOLS = [
   "ChatGPT",
   "Suno",
   "Runway",
-  "Latent.Market Studio",
+  BRAND.studioName,
 ] as const;

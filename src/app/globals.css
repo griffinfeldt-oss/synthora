@@ -150,41 +150,41 @@ a {
 }
 
 /* Long-form legal and help copy */
-.prose-lm {
+.prose-brand {
   max-width: 68ch;
 }
-.prose-lm h2 {
+.prose-brand h2 {
   font-size: 1.5rem;
   margin: 2rem 0 0.75rem;
 }
-.prose-lm h3 {
+.prose-brand h3 {
   font-size: 1.15rem;
   margin: 1.5rem 0 0.5rem;
 }
-.prose-lm p,
-.prose-lm li {
+.prose-brand p,
+.prose-brand li {
   color: var(--muted);
   margin: 0 0 0.85rem;
 }
-.prose-lm ul {
+.prose-brand ul {
   list-style: disc;
   padding-left: 1.25rem;
 }
-.prose-lm ol {
+.prose-brand ol {
   list-style: decimal;
   padding-left: 1.25rem;
 }
-.prose-lm a {
+.prose-brand a {
   color: var(--signal);
   text-decoration: underline;
 }
-.prose-lm strong {
+.prose-brand strong {
   color: var(--ink);
   font-weight: 600;
 }
 
 /* Pixel dot used in the wordmark */
-.lm-pixel {
+.brand-pixel {
   display: inline-block;
   width: 0.28em;
   height: 0.28em;

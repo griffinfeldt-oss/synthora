@@ -11,7 +11,7 @@ export default function IpPage() {
         <PageBand title="Intellectual property" sub="How to report a listing that copies your work, and what happens next." />
       </div>
       <Container className="mt-12 grid max-w-5xl gap-12 lg:grid-cols-[1fr_1fr]">
-        <article className="prose-lm">
+        <article className="prose-brand">
           <Notice tone="warn" title="Draft, pending legal review" className="mb-6" />
           <h2>Our policy</h2>
           <p>AI makes it easy to imitate. Sellers must confirm they hold the rights to everything they list, and we remove listings that copy others&apos; artwork, characters, logos or trademarks.</p>

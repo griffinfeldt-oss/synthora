@@ -1,8 +1,8 @@
 {
-  "name": "latent-market",
+  "name": "synthora",
   "version": "0.1.0",
   "private": true,
-  "description": "Latent.Market: a marketplace for AI-made products",
+  "description": "Synthora: a marketplace for AI-made products",
   "engines": {
     "node": ">=20.9"
   },

@@ -6,6 +6,7 @@ import { safeEqual } from "@/lib/crypto";
 import { env } from "@/lib/env";
 import { privateDownloadUrl } from "@/lib/storage";
 import { currentUser } from "@/server/session";
+import { BRAND } from "@/config/brand";
 
 const MAX_DOWNLOADS = 20;
 
@@ -24,7 +25,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ itemId: 
     return new NextResponse("This download is not available.", { status: 403 });
   }
   if (item.downloadCount >= MAX_DOWNLOADS) {
-    return new NextResponse("Download limit reached. Contact help@latent.market.", { status: 429 });
+    return new NextResponse(`Download limit reached. Contact ${BRAND.supportEmail}.`, { status: 429 });
   }
   await db.orderItem.update({ where: { id: item.id }, data: { downloadCount: { increment: 1 } } });
   const asset = item.listing.digitalAsset;

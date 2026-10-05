@@ -1,4 +1,4 @@
-# Latent.Market — Product Requirements Document
+# Synthora — Product Requirements Document
 
 | | |
 | --- | --- |
@@ -10,9 +10,9 @@
 
 ## 1. Summary
 
-Latent.Market is an online marketplace where every product is made with AI, and says so. Sellers turn a few words into a real product (a T-shirt, poster, mug, sticker, embroidered patch or digital file) and list it in minutes. Buyers see exactly which AI tool made each item and how.
+Synthora is an online marketplace where every product is made with AI, and says so. Sellers turn a few words into a real product (a T-shirt, poster, mug, sticker, embroidered patch or digital file) and list it in minutes. Buyers see exactly which AI tool made each item and how.
 
-Latent.Market sits in the middle of every sale. Buyers pay the platform. The platform keeps a commission, holds the seller's money until the order is delivered, then pays the seller. Production is handled by print-on-demand partners (Printify, Printful, Gelato) that each seller connects with their own account, or by the seller (self-ship), or not at all (digital downloads).
+Synthora sits in the middle of every sale. Buyers pay the platform. The platform keeps a commission, holds the seller's money until the order is delivered, then pays the seller. Production is handled by print-on-demand partners (Printify, Printful, Gelato) that each seller connects with their own account, or by the seller (self-ship), or not at all (digital downloads).
 
 ## 2. Problem
 
@@ -219,11 +219,11 @@ The step-by-step checklist (env vars, webhook URLs, partner setup, domain) is in
 
 ## 12. Appendix: trying the product
 
-The full app runs locally with no keys; see the [README](../README.md#run-it-locally-no-keys-needed). Demo accounts (password `latent-demo`):
+The full app runs locally with no keys; see the [README](../README.md#run-it-locally-no-keys-needed). Demo accounts (password `synthora-demo`):
 
 | Account | Shows |
 | --- | --- |
-| `admin@latent.market` | Admin area |
+| `admin@synthora.market` | Admin area |
 | `buyer@example.com` | Buyer with orders in every state |
 | `nightshift@example.com` | Seller using Printful + Printify |
 | `geometry@example.com` | Seller using Gelato + digital files |

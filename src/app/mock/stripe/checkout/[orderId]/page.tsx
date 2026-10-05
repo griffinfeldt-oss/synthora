@@ -15,7 +15,7 @@ export default async function MockCheckout({ params }: { params: Promise<{ order
   if (!order) notFound();
   const paid = order.status !== "PENDING_PAYMENT" && order.status !== "CANCELED";
   return (
-    <MockFrame title={`Pay Latent.Market`}>
+    <MockFrame title={`Pay Synthora`}>
       <ul className="space-y-1.5 text-[14px]">
         {order.items.map((i) => (
           <li key={i.id} className="flex justify-between gap-4">

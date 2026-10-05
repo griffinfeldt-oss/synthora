@@ -73,7 +73,7 @@ export function Footer() {
               ))}
             </ul>
             <div className="flex items-center gap-4">
-              <p className="font-serif text-[13px] text-band-muted">© {new Date().getFullYear()} Latent.Market</p>
+              <p className="font-serif text-[13px] text-band-muted">© {new Date().getFullYear()} Synthora</p>
               <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1 text-[12px] font-semibold text-band-ink">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
                   <rect x="5" y="11" width="14" height="10" rx="1" />

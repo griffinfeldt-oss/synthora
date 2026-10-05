@@ -15,7 +15,7 @@ import type { PaymentGateway } from "./types";
 let stripe: Stripe | null = null;
 export function stripeClient(): Stripe {
   stripe ??= new Stripe(env.stripeSecretKey, {
-    appInfo: { name: "Latent.Market", url: env.appUrl },
+    appInfo: { name: "Synthora", url: env.appUrl },
     maxNetworkRetries: 2,
   });
   return stripe;
@@ -44,7 +44,7 @@ export class StripeGateway implements PaymentGateway {
         })),
         payment_intent_data: {
           transfer_group: input.orderId,
-          description: `Latent.Market order ${input.orderNumber}`,
+          description: `Synthora order ${input.orderNumber}`,
           metadata: { orderId: input.orderId, orderNumber: input.orderNumber },
         },
         metadata: { orderId: input.orderId, kind: "order" },
@@ -68,7 +68,7 @@ export class StripeGateway implements PaymentGateway {
           name: input.shopName,
           // Stripe rejects localhost URLs here.
           url: env.appUrl.includes("localhost") ? undefined : env.appUrl,
-          product_description: "AI-made products sold on Latent.Market",
+          product_description: "AI-made products sold on Synthora",
         },
         metadata: { sellerId: input.sellerId },
       },

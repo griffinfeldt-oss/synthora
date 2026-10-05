@@ -1,4 +1,4 @@
-# Latent.Market
+# Synthora
 
 A marketplace for AI-made products. Sellers list things made with AI (prints, apparel, homeware, stickers, embroidered patches, digital files); every listing names the AI tool and says how it was made. Buyers pay the platform; the platform keeps an 8% commission, passes card processing through at cost, holds the seller's money until delivery, then pays the seller through Stripe Connect. Sellers pay $3/month.
 
@@ -25,11 +25,11 @@ npm run db:seed             # demo shops, listings and orders in every state
 npm run dev                 # http://localhost:3000
 ```
 
-Demo accounts (all use the password `latent-demo`, set in `prisma/seed.ts`; seed refuses to run in production):
+Demo accounts (all use the password `synthora-demo`, set in `prisma/seed.ts`; seed refuses to run in production):
 
 | Email | What it shows |
 | --- | --- |
-| `admin@latent.market` | Admin area: approvals, reports, IP notices, refunds, ledger, outbox |
+| `admin@synthora.market` | Admin area: approvals, reports, IP notices, refunds, ledger, outbox |
 | `buyer@example.com` | Buyer with delivered, in-progress, refunded and failed orders |
 | `nightshift@example.com` | Seller using Printful + Printify (demo connections) |
 | `geometry@example.com` | Seller using Gelato + digital files |
@@ -53,14 +53,14 @@ Demo accounts (all use the password `latent-demo`, set in `prisma/seed.ts`; seed
 | --- | --- |
 | `npm run dev` | Dev server (regenerates adapter registries first) |
 | `npm run build` / `npm start` | Production build / serve |
-| `npm test` | Vitest: fee math, payout splits, adapter contract, webhooks (uses database `latent_test`) |
+| `npm test` | Vitest: fee math, payout splits, adapter contract, webhooks (uses database `synthora_test`) |
 | `npm run typecheck` | TypeScript |
 | `npm run db:migrate` | Create/apply migrations in development |
 | `npm run db:deploy` | Apply migrations in production (`prisma migrate deploy`) |
 | `npm run db:seed` | Wipe and load demo data (dev only) |
 | `npm run gen` | Rebuild the adapter registries from `src/fulfillment/adapters` and `src/ai/*` |
 
-Tests need the `latent_test` database. Docker Compose creates it; with your own Postgres run `createdb -O latent latent_test`, or set `DATABASE_URL_TEST`.
+Tests need the `synthora_test` database. Docker Compose creates it; with your own Postgres run `createdb -O synthora synthora_test`, or set `DATABASE_URL_TEST`.
 
 ## Where things live
 
@@ -116,9 +116,9 @@ Do these in order. Test everything with Stripe **test mode** keys first, then re
 Generate and set: `AUTH_SECRET` (`openssl rand -base64 32`), `ENCRYPTION_KEY` (32 random bytes, base64; **back it up**, partner keys can't be decrypted without it), `CRON_SECRET`, `PRINTIFY_WEBHOOK_SECRET`, `PRINTFUL_WEBHOOK_SECRET`, `GELATO_WEBHOOK_SECRET`. `npm run setup` prints a fresh set into `.env` you can copy from. Set `ADMIN_EMAILS` to your email. Leave `MOCK_MODE=false`.
 
 ### 4. Stripe
-1. Activate your Stripe account; set business name, support email, statement descriptor ("LATENT MARKET").
+1. Activate your Stripe account; set business name, support email, statement descriptor ("SYNTHORA").
 2. **Connect**: Dashboard → Connect → get started → choose **Platform/marketplace**, **Express** accounts, and the "Separate charges and transfers" funds flow. Fill in the platform profile and branding (shown during seller onboarding). Make sure your platform is allowed to onboard sellers in the countries you'll support.
-3. **Billing**: optionally create a Product "Latent.Market seller plan" with a recurring **$3.00/month** price and set `STRIPE_SUBSCRIPTION_PRICE_ID` (otherwise Checkout creates the price inline). Settings → Billing → Customer portal: enable updating payment methods and canceling.
+3. **Billing**: optionally create a Product "Synthora seller plan" with a recurring **$3.00/month** price and set `STRIPE_SUBSCRIPTION_PRICE_ID` (otherwise Checkout creates the price inline). Settings → Billing → Customer portal: enable updating payment methods and canceling.
 4. **Webhooks** (Developers → Webhooks). Set the endpoint API version to `2026-09-30.endive` (the version this SDK uses).
    - Endpoint A, *your account*: `https://<domain>/api/webhooks/stripe`, events: `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.expired`, `charge.refunded`, `charge.dispute.created`, `charge.dispute.closed`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.paid`, `invoice.payment_failed`. Copy its signing secret to `STRIPE_WEBHOOK_SECRET`.
    - Endpoint B, *connected accounts*: same URL, event `account.updated`. Copy its signing secret to `STRIPE_CONNECT_WEBHOOK_SECRET`.

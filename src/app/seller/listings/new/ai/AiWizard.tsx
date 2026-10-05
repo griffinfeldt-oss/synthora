@@ -394,7 +394,7 @@ export function AiWizard({ providers, sampleDesign, canPublish, missing }: { pro
                   </div>
                 </div>
               ) : (
-                <p className="text-[13px] text-muted">{provider?.mock || !provider?.mockups ? "Rendered by Latent.Market's mockup engine." : null}</p>
+                <p className="text-[13px] text-muted">{provider?.mock || !provider?.mockups ? "Rendered by Synthora's mockup engine." : null}</p>
               )}
               <div className="flex flex-wrap gap-3">
                 <Button onClick={toDetails} disabled={pending}>

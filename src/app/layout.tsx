@@ -16,7 +16,7 @@ const playfair = Playfair_Display({
 const poppins = Poppins({ subsets: ["latin"], weight: ["400", "500", "600", "700"], variable: "--font-poppins", display: "swap" });
 
 export const metadata: Metadata = {
-  title: { default: "Latent.Market — goods made with AI, labeled honestly", template: "%s · Latent.Market" },
+  title: { default: "Synthora — goods made with AI, labeled honestly", template: "%s · Synthora" },
   description:
     "A marketplace for AI-made products. Every listing names the AI tool used and explains how it was made. Prints, apparel, homeware and digital files.",
   metadataBase: new URL(process.env.APP_URL ?? "http://localhost:3000"),
@@ -30,7 +30,7 @@ export const viewport: Viewport = {
 };
 
 // Runs before paint so a saved theme never flashes.
-const themeScript = `try{var t=localStorage.getItem("lm-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}`;
+const themeScript = `try{var t=localStorage.getItem("synthora-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}`;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

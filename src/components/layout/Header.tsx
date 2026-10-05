@@ -11,7 +11,7 @@ export async function Header() {
     { href: "/shop", label: "Shop all" },
     ...CATEGORIES.map((c) => ({ href: `/shop?category=${c.id}`, label: c.label })),
     { href: "/how-it-works", label: "How it works" },
-    { href: sellerHref, label: user?.seller ? "Seller dashboard" : "Sell on Latent" },
+    { href: sellerHref, label: user?.seller ? "Seller dashboard" : "Sell on Synthora" },
     { href: user ? "/account" : "/sign-in", label: user ? "Your account" : "Sign in" },
     ...(isAdmin(user) ? [{ href: "/admin", label: "Admin" }] : []),
   ];
@@ -28,7 +28,7 @@ export async function Header() {
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
               <path d="M4 9l1.5-5h13L20 9M4 9v11h16V9M4 9h16M9 20v-6h6v6" />
             </svg>
-            {user?.seller ? "Seller dashboard" : "Sell on Latent"}
+            {user?.seller ? "Seller dashboard" : "Sell on Synthora"}
           </Link>
           <Link href={user ? "/account" : "/sign-in"} className="hidden items-center gap-2 px-2 font-serif text-[14px] text-muted hover:text-ink md:inline-flex">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>

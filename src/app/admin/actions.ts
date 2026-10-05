@@ -38,7 +38,7 @@ export async function takedownAction(formData: FormData) {
 
 export async function adminRefundAction(_prev: Result, formData: FormData): Promise<Result> {
   const admin = await requireAdmin();
-  const reason = String(formData.get("reason") ?? "").trim() || "Refunded by Latent.Market";
+  const reason = String(formData.get("reason") ?? "").trim() || "Refunded by Synthora";
   try {
     if (formData.get("scope") === "order") {
       const total = await refundWholeOrder(String(formData.get("orderId")), reason, admin.id);

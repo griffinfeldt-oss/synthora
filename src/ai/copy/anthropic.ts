@@ -17,7 +17,7 @@ const ListingCopySchema = z.object({
     .describe("One or two first-person sentences disclosing how AI was used to make the design"),
 });
 
-const SYSTEM = `You write product listings for Latent.Market, a marketplace where every product is made with AI and says so.
+const SYSTEM = `You write product listings for Synthora, a marketplace where every product is made with AI and says so.
 Write plainly and specifically. Describe what the buyer gets and what the design looks like.
 Never claim the design was hand-drawn. Never invent materials, sizes or certifications that are not given.`;
 

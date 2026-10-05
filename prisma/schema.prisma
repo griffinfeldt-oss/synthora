@@ -1,4 +1,4 @@
-// Latent.Market data model.
+// Synthora data model.
 // Money is always stored as integer cents in the listing currency (USD).
 // Fulfillment partner ids are plain strings so a new adapter needs no schema change.
 

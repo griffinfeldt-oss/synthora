@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import { Button, Checkbox, Field, Input, Notice, Textarea } from "@/components/ui";
 import { takedownAction } from "./actions";
+import { BRAND } from "@/config/brand";
 
 export function TakedownForm() {
   const [state, action, pending] = useActionState(takedownAction, null as null | { ok: boolean; message: string });
@@ -10,7 +11,7 @@ export function TakedownForm() {
   return (
     <form action={action} className="space-y-4">
       <Field label="Link to the listing" htmlFor="listingUrl">
-        <Input id="listingUrl" name="listingUrl" placeholder="https://latent.market/l/…" required />
+        <Input id="listingUrl" name="listingUrl" placeholder={`https://${BRAND.domain}/l/…`} required />
       </Field>
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Your full name" htmlFor="claimantName">

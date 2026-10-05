@@ -31,7 +31,7 @@ if (process.env.NODE_ENV === "production" && process.env.SEED_ALLOW !== "true") 
 }
 
 // Demo-only password for every seeded account (documented in the README).
-const DEMO_PASSWORD = process.env.SEED_PASSWORD ?? "latent-demo";
+const DEMO_PASSWORD = process.env.SEED_PASSWORD ?? "synthora-demo";
 
 async function wipe() {
   const tables = await db.$queryRawUnsafe<Array<{ tablename: string }>>(
@@ -160,7 +160,7 @@ async function main() {
   console.log("Wiping database…");
   await wipe();
 
-  const admin = await user("admin@latent.market", "Admin", "ADMIN");
+  const admin = await user("admin@synthora.market", "Admin", "ADMIN");
   const maya = await user("buyer@example.com", "Maya Chen");
 
   const night = await seller("nightshift@example.com", "Rafa Ortiz", {
@@ -284,8 +284,8 @@ async function main() {
       tags: ["patch", "owl"], inventory: 12, shippingCents: 400,
     }),
     bear: await makeListing(patch, {
-      prompt: "Bear emblem 'Camp Latent' vintage badge", type: "patch", provider: "self", seed: 14,
-      title: "Camp Latent Bear Patch", description: "A vintage camp-style bear emblem, 4 inches, with a merrowed edge.",
+      prompt: "Bear emblem 'Camp Synthora' vintage badge", type: "patch", provider: "self", seed: 14,
+      title: "Camp Synthora Bear Patch", description: "A vintage camp-style bear emblem, 4 inches, with a merrowed edge.",
       priceCents: 1600, aiTool: "Midjourney", involvement: "ASSISTED", howMade: "Midjourney badge concept, redrawn as stitch paths in my digitising software.",
       tags: ["patch", "bear", "camp"], inventory: 30, shippingCents: 400,
     }),
@@ -401,7 +401,7 @@ async function main() {
   });
 
   console.log("\nDone. Sign in with any of these (password: %s):", DEMO_PASSWORD);
-  console.log("  admin@latent.market     admin");
+  console.log("  admin@synthora.market     admin");
   console.log("  buyer@example.com       buyer with orders");
   console.log("  nightshift@example.com  seller (Printful + Printify)");
   console.log("  geometry@example.com    seller (Gelato + digital)");

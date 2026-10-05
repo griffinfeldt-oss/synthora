@@ -117,7 +117,7 @@ describe("live mode request shapes (fetch stubbed)", () => {
     return calls;
   }
 
-  const live = (credentials: Record<string, string>, externalShopId?: string): ProviderContext => ({ credentials, mock: false, externalShopId, appUrl: "https://latent.market" });
+  const live = (credentials: Record<string, string>, externalShopId?: string): ProviderContext => ({ credentials, mock: false, externalShopId, appUrl: "https://synthora.market" });
   const item = (id: string, variant: string, data: Record<string, unknown> = {}) => ({ partnerProductId: id, partnerVariantId: variant, quantity: 1, designUrl: "https://cdn.test/d.png", partnerData: data, title: "Tee" });
 
   it("Printify: creates the order in the seller's shop and sends it to production", async () => {

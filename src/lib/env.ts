@@ -1,3 +1,5 @@
+import { BRAND } from "@/config/brand";
+
 /**
  * Environment access and mock-mode switches.
  *
@@ -36,7 +38,7 @@ export const env = {
   openaiImageModel: process.env.OPENAI_IMAGE_MODEL ?? "gpt-image-1",
   anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? "",
   resendApiKey: process.env.RESEND_API_KEY ?? "",
-  emailFrom: process.env.EMAIL_FROM ?? "Latent.Market <hello@latent.market>",
+  emailFrom: process.env.EMAIL_FROM ?? `${BRAND.name} <hello@${BRAND.domain}>`,
 };
 
 export const mock = {

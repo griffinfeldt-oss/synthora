@@ -90,7 +90,7 @@ export default async function AccountPage() {
             )}
           </section>
           <section className="border border-line bg-surface p-5">
-            <h2 className="font-serif text-[20px]">{user.seller ? user.seller.shopName : "Sell on Latent.Market"}</h2>
+            <h2 className="font-serif text-[20px]">{user.seller ? user.seller.shopName : "Sell on Synthora"}</h2>
             <p className="mt-1 text-[14px] text-muted">{user.seller ? "Manage listings, orders and payouts." : "Open a shop for $3 a month. List in minutes with AI."}</p>
             <ButtonLink href={user.seller ? "/seller" : "/sell"} variant="secondary" size="sm" className="mt-4">
               {user.seller ? "Seller dashboard" : "Learn more"}

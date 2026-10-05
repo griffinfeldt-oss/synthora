@@ -5,7 +5,7 @@ import { currentUser } from "@/server/session";
 import { ButtonLink, Container, PageBand, SectionTitle } from "@/components/ui";
 import { Calculator } from "./Calculator";
 
-export const metadata: Metadata = { title: "Sell on Latent.Market" };
+export const metadata: Metadata = { title: "Sell on Synthora" };
 
 export default async function SellPage() {
   const user = await currentUser();

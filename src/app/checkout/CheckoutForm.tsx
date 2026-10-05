@@ -151,7 +151,7 @@ export function CheckoutForm({ defaultEmail, defaultName }: { defaultEmail: stri
           {submitting ? "Opening secure checkout…" : "Pay with Stripe"}
         </Button>
         <p className="mt-3 text-[12px] leading-relaxed text-muted">
-          Card details are entered on Stripe, never on Latent.Market. By paying you agree to the{" "}
+          Card details are entered on Stripe, never on Synthora. By paying you agree to the{" "}
           <a href="/legal/buyer-terms" className="underline">
             buyer terms
           </a>

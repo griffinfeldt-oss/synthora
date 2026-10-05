@@ -1,16 +1,16 @@
-# Latent.Market — Design brief
+# Synthora — Design brief
 
 ## Source of the format
 
-The layout follows the Webflow **"Fre" eCommerce template** in the `Latent Market`
-Webflow project (studied in the Designer on 2026‑10‑02). We keep its editorial
+The layout follows the Webflow **"Fre" eCommerce template** in the Webflow project
+set up for this marketplace (named `Latent Market`, the working name before Synthora) (studied in the Designer on 2026‑10‑02). We keep its editorial
 skeleton and replace the generic parts with a brand of our own.
 
 What we keep from Fre:
 
-| Fre element | Latent.Market version |
+| Fre element | Synthora version |
 | --- | --- |
-| Header: script wordmark + small serif tagline on the left, contact links and a cart badge on the right | Wordmark `latent·market` + tagline "Goods made with AI, labeled honestly". Right side: Sell, Account, theme toggle, cart with count badge |
+| Header: script wordmark + small serif tagline on the left, contact links and a cart badge on the right | Wordmark `synthora▪` + tagline "Goods made with AI, labeled honestly". Right side: Sell, Account, theme toggle, cart with count badge |
 | Centered nav row under the header (Home · Shop ▾ · Contact) | Centered nav: Shop ▾ (categories) · AI tools · Sell · How it works |
 | Inset full‑bleed hero photo, dark overlay, large centered Playfair headline, square dark button | Inset hero band built from a collage of real listing mockups, dark overlay, centered serif headline, square button |
 | Three dark category tiles with serif labels bottom‑right | Category tiles (Apparel, Art & Prints, Home, Digital…) |
@@ -25,9 +25,12 @@ What we keep from Fre:
 
 ## Brand
 
-- **Idea.** "Latent" is the hidden space an AI model draws from. The mark is
-  `latent·market`, where the middle dot is a small square "pixel" in the signal
-  colour. It is the only ornament we use.
+- **Name.** *Synthora*: from *synthesis* (everything here is made by AI
+  synthesis) with the *-ora* of *aurora*, a little light. One word, easy to say.
+- **Mark.** `synthora▪`: *synth* in italic, *ora* in roman, closed by a small
+  square "pixel" full stop in the signal colour. The pixel nods to what every
+  design starts as; the full stop to the plain statement each listing makes about
+  how it was made. It is the only ornament we use.
 - **Voice.** Plain, specific, honest. Every listing says which AI made it and how.
   We never hide the AI; the disclosure is a selling point.
 - **Type.** *Playfair Display* (headings, product names, prices, italic accents,

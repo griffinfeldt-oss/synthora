@@ -1,3 +1,5 @@
+import { BRAND } from "@/config/brand";
+
 export function cn(...classes: Array<string | false | null | undefined>): string {
   return classes.filter(Boolean).join(" ");
 }
@@ -53,13 +55,13 @@ export function addDays(d: Date, days: number): Date {
   return new Date(d.getTime() + days * 24 * 60 * 60 * 1000);
 }
 
-/** Human-friendly, collision-resistant order number, e.g. LM-261002-7KQ4X. */
+/** Human-friendly, collision-resistant order number, e.g. SYN-261005-7KQ4X. */
 export function orderNumber(date = new Date()): string {
   const ymd = date.toISOString().slice(2, 10).replace(/-/g, "");
   const alphabet = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
   let code = "";
   for (let i = 0; i < 5; i++) code += alphabet[Math.floor(Math.random() * alphabet.length)];
-  return `LM-${ymd}-${code}`;
+  return `${BRAND.orderPrefix}-${ymd}-${code}`;
 }
 
 export function pluralize(n: number, one: string, many = `${one}s`): string {

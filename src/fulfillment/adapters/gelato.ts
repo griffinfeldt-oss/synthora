@@ -189,7 +189,7 @@ const gelato: FulfillmentProvider = {
       headers: headers(ctx),
       json: {
         orderReferenceId: `quote-${Date.now()}`,
-        customerReferenceId: "latent-market",
+        customerReferenceId: "synthora",
         currency: "USD",
         allowMultipleQuotes: false,
         recipient: address(shipTo),
@@ -223,7 +223,7 @@ const gelato: FulfillmentProvider = {
       json: {
         orderType: "order",
         orderReferenceId: order.externalId,
-        customerReferenceId: "latent-market",
+        customerReferenceId: "synthora",
         currency: "USD",
         items: order.items.map((i, idx) => ({
           itemReferenceId: `${order.externalId}-${idx}`,

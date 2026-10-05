@@ -31,7 +31,7 @@ export async function partnerFetch<T>(
     headers.set("Content-Type", "application/json");
     body = JSON.stringify(init.json);
   }
-  headers.set("User-Agent", "LatentMarket/1.0");
+  headers.set("User-Agent", "Synthora/1.0");
   const res = await fetch(url, { ...init, headers, body, cache: "no-store" });
   const text = await res.text();
   let data: unknown = text;

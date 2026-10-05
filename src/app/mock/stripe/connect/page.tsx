@@ -10,7 +10,7 @@ export default async function MockConnect({ searchParams }: { searchParams: Prom
   const { seller } = await requireSeller();
   const sp = await searchParams;
   return (
-    <MockFrame title="Set up payouts for Latent.Market">
+    <MockFrame title="Set up payouts for Synthora">
       <p className="text-[14px] text-muted">
         Stripe Express collects identity and bank details so {seller.shopName} can receive payouts. In demo mode we skip the forms.
       </p>

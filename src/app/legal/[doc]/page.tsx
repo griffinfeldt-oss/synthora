@@ -23,9 +23,9 @@ export default async function LegalPage({ params }: { params: Params }) {
       </div>
       <Container className="mt-12">
         <Notice tone="warn" title="Draft, pending legal review" className="mx-auto mb-10 max-w-[68ch]">
-          This text describes how Latent.Market works today. It is not final legal advice and will be reviewed before launch.
+          This text describes how Synthora works today. It is not final legal advice and will be reviewed before launch.
         </Notice>
-        <article className="prose-lm mx-auto">{doc.body}</article>
+        <article className="prose-brand mx-auto">{doc.body}</article>
       </Container>
     </>
   );

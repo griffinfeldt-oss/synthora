@@ -12,6 +12,7 @@ import { confirmDeliveryAction } from "@/app/actions/orders";
 import { ListingVisual } from "@/components/product/ListingVisual";
 import { Button, Container, Notice, PageBand, Pill } from "@/components/ui";
 import { ReviewForm } from "./ReviewForm";
+import { BRAND } from "@/config/brand";
 
 export const metadata: Metadata = { title: "Order" };
 export const dynamic = "force-dynamic";
@@ -157,8 +158,8 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
           <h2 className="font-serif text-[20px]">Something wrong?</h2>
           <p className="mt-1 text-muted">
             Damaged, wrong or missing items are covered by our <Link href="/legal/returns" className="underline">returns policy</Link>. Email{" "}
-            <a href="mailto:help@latent.market" className="underline">
-              help@latent.market
+            <a href={`mailto:${BRAND.supportEmail}`} className="underline">
+              {BRAND.supportEmail}
             </a>{" "}
             with your order number <strong>{order.number}</strong> and we will sort it out. Your payment is held until delivery.
           </p>

@@ -361,7 +361,7 @@ const printify: FulfillmentProvider = {
     const upload = await partnerFetch<{ id: string }>("Printify", `${API}/uploads/images.json`, {
       method: "POST",
       headers: headers(ctx),
-      json: { file_name: "latent-design.png", url: input.designUrl },
+      json: { file_name: "synthora-design.png", url: input.designUrl },
     });
     const variantIds = input.partnerVariantIds.map(numberish);
     const product = await partnerFetch<{ images: Array<{ src: string; is_default: boolean }> }>(
@@ -371,8 +371,8 @@ const printify: FulfillmentProvider = {
         method: "POST",
         headers: headers(ctx),
         json: {
-          title: "Latent.Market mockup",
-          description: "Created by Latent.Market to render product photos.",
+          title: "Synthora mockup",
+          description: "Created by Synthora to render product photos.",
           blueprint_id: d.blueprintId ?? numberish(input.partnerProductId),
           print_provider_id: d.printProviderId,
           variants: variantIds.map((id) => ({ id, price: 100, is_enabled: true })),

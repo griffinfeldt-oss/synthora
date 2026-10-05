@@ -22,7 +22,7 @@ export async function notifyUser(userId: string, note: Note): Promise<void> {
     await sendEmail({
       to: user.email,
       subject: note.title,
-      text: `${note.body}${note.href ? `\n\n${env.appUrl}${note.href}` : ""}\n\n— Latent.Market`,
+      text: `${note.body}${note.href ? `\n\n${env.appUrl}${note.href}` : ""}\n\n— Synthora`,
     });
   }
 }
@@ -41,7 +41,7 @@ export async function notifyBuyer(
   if (order.buyerId) {
     await notifyUser(order.buyerId, { ...note, href });
   } else {
-    await sendEmail({ to: order.email, subject: note.title, text: `${note.body}\n\n${env.appUrl}${href}\n\n— Latent.Market` });
+    await sendEmail({ to: order.email, subject: note.title, text: `${note.body}\n\n${env.appUrl}${href}\n\n— Synthora` });
   }
 }
 

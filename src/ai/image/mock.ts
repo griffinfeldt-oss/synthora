@@ -1,10 +1,11 @@
 /** Mock image model: procedural SVG artwork, no API key needed. */
 import type { ImageModel } from "../types";
 import { renderArt } from "../art";
+import { BRAND } from "@/config/brand";
 
 const mockImageModel: ImageModel = {
   id: "mock",
-  label: "Latent.Market Studio (demo model)",
+  label: `${BRAND.studioName} (demo model)`,
   priority: 100,
   available: () => true,
   async generate({ prompt, productType, count, seed }) {

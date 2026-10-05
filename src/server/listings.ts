@@ -162,7 +162,7 @@ export async function createListing(seller: Seller, input: ListingInput): Promis
 export async function setListingStatusBySeller(sellerId: string, listingId: string, action: "pause" | "activate" | "delete") {
   const listing = await db.listing.findFirst({ where: { id: listingId, sellerId }, include: { seller: true } });
   if (!listing) throw new ListingError("Listing not found");
-  if (listing.status === "SUSPENDED" || listing.status === "REMOVED") throw new ListingError("This listing was taken down by Latent.Market and cannot be changed here.");
+  if (listing.status === "SUSPENDED" || listing.status === "REMOVED") throw new ListingError("This listing was taken down by Synthora and cannot be changed here.");
   if (action === "pause") {
     await db.listing.update({ where: { id: listingId }, data: { status: "PAUSED", statusReason: "Paused by seller" } });
   } else if (action === "activate") {

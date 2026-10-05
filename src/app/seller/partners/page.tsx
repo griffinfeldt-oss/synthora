@@ -24,7 +24,7 @@ export default async function PartnersPage() {
       <div>
         <h2 className="font-serif text-[24px]">How you fulfil orders</h2>
         <p className="mt-1 max-w-2xl text-[14.5px] text-muted">
-          Choose per listing. Partner orders are placed in <strong>your own</strong> partner account and billed to you by the partner; Latent.Market never pays partner bills. Keys are encrypted at rest.
+          Choose per listing. Partner orders are placed in <strong>your own</strong> partner account and billed to you by the partner; Synthora never pays partner bills. Keys are encrypted at rest.
         </p>
       </div>
 

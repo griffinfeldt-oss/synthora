@@ -37,7 +37,7 @@ export default async function EditListing({ params, searchParams }: { params: Pr
         </Notice>
       ) : null}
       {listing.status === "SUSPENDED" || listing.status === "REMOVED" ? (
-        <Notice tone="danger" title={listing.status === "REMOVED" ? "Removed" : "Suspended by Latent.Market"}>
+        <Notice tone="danger" title={listing.status === "REMOVED" ? "Removed" : "Suspended by Synthora"}>
           {listing.statusReason ?? "Policy review."}
         </Notice>
       ) : null}

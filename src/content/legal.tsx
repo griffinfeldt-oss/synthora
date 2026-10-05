@@ -5,6 +5,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { FEES } from "@/config/fees";
+import { BRAND } from "@/config/brand";
 
 const fee = `$${(FEES.subscription.monthlyCents / 100).toFixed(2)}`;
 const commission = `${FEES.commission.rateBps / 100}%`;
@@ -15,7 +16,7 @@ export const LEGAL: Record<string, { title: string; updated: string; body: React
     updated: "2 October 2026",
     body: (
       <>
-        <p>These terms apply when you open a shop on Latent.Market (&ldquo;we&rdquo;, &ldquo;us&rdquo;). By creating a shop you agree to them and to the <Link href="/legal/buyer-terms">buyer terms</Link>, <Link href="/legal/privacy">privacy policy</Link> and <Link href="/legal/prohibited">prohibited items list</Link>.</p>
+        <p>These terms apply when you open a shop on Synthora (&ldquo;we&rdquo;, &ldquo;us&rdquo;). By creating a shop you agree to them and to the <Link href="/legal/buyer-terms">buyer terms</Link>, <Link href="/legal/privacy">privacy policy</Link> and <Link href="/legal/prohibited">prohibited items list</Link>.</p>
         <h2>1. What you can sell</h2>
         <p>Only products made with AI. This includes items that are fully AI-generated and items that are AI-generated and then edited or finished by you. Every listing must name the AI tool used and include an honest &ldquo;how it was made&rdquo; note. Misrepresenting how something was made is grounds for removal.</p>
         <h2>2. Your rights to what you sell</h2>
@@ -27,7 +28,7 @@ export const LEGAL: Record<string, { title: string; updated: string; body: React
           <li>Card processing fees charged by Stripe ({FEES.processing.rateBps / 100}% + {FEES.processing.fixedCents}¢ for standard cards), passed through at cost and deducted from your payout. When a cart contains items from several sellers, the fee is split in proportion to each seller&apos;s share of the charge.</li>
         </ul>
         <h2>4. Payments and payouts</h2>
-        <p>Buyers pay Latent.Market. We hold your share until the buyer confirms delivery or {FEES.payoutHold.daysAfterDelivered} days after tracking shows the order delivered ({FEES.payoutHold.digitalDays} days after purchase for digital goods; {FEES.payoutHold.daysAfterShippedWithoutDelivery} days after shipping if no delivery scan is received). We then transfer your earnings to your Stripe Express account. Payouts may be held during disputes, investigations or while your shop is suspended.</p>
+        <p>Buyers pay Synthora. We hold your share until the buyer confirms delivery or {FEES.payoutHold.daysAfterDelivered} days after tracking shows the order delivered ({FEES.payoutHold.digitalDays} days after purchase for digital goods; {FEES.payoutHold.daysAfterShippedWithoutDelivery} days after shipping if no delivery scan is received). We then transfer your earnings to your Stripe Express account. Payouts may be held during disputes, investigations or while your shop is suspended.</p>
         <h2>5. Fulfillment partners</h2>
         <p>You may connect your own accounts at Printify, Printful, Gelato or other supported partners. Orders are placed in your partner account and your partner bills you directly for production and shipping. We do not pay partner invoices. You are responsible for keeping your partner account in good standing; if a partner rejects an order you must fix it or refund the buyer promptly.</p>
         <h2>6. Self-shipped and digital items</h2>
@@ -48,11 +49,11 @@ export const LEGAL: Record<string, { title: string; updated: string; body: React
     updated: "2 October 2026",
     body: (
       <>
-        <p>Latent.Market is a marketplace. Items are made and sold by independent sellers; we run the checkout, hold payments and step in when something goes wrong.</p>
+        <p>Synthora is a marketplace. Items are made and sold by independent sellers; we run the checkout, hold payments and step in when something goes wrong.</p>
         <h2>1. AI-made products</h2>
         <p>Everything sold here is made with AI. Each listing tells you which tool was used and how. If a listing&apos;s disclosure is wrong, report it and we will investigate.</p>
         <h2>2. Paying</h2>
-        <p>You pay Latent.Market through Stripe. Your card details are entered on Stripe and never reach our servers. Prices are in US dollars. Shipping is quoted from each seller&apos;s fulfillment partner at checkout.</p>
+        <p>You pay Synthora through Stripe. Your card details are entered on Stripe and never reach our servers. Prices are in US dollars. Shipping is quoted from each seller&apos;s fulfillment partner at checkout.</p>
         <h2>3. Made to order</h2>
         <p>Most physical items are produced after you order, so production times apply before shipping. Estimated delivery times are shown at checkout.</p>
         <h2>4. Delivery and confirmation</h2>
@@ -86,7 +87,7 @@ export const LEGAL: Record<string, { title: string; updated: string; body: React
           <li>AI providers receive sellers&apos; design prompts when sellers use the listing studio. Buyer data is never sent to AI providers.</li>
         </ul>
         <h2>Your choices</h2>
-        <p>You can request a copy or deletion of your data by emailing privacy@latent.market. Order records we must keep for tax and accounting are retained for the legally required period.</p>
+        <p>You can request a copy or deletion of your data by emailing {BRAND.privacyEmail}. Order records we must keep for tax and accounting are retained for the legally required period.</p>
         <h2>Cookies</h2>
         <p>We use a sign-in cookie and store your cart and theme choice in your browser. We do not use advertising cookies.</p>
       </>
@@ -113,7 +114,7 @@ export const LEGAL: Record<string, { title: string; updated: string; body: React
           <li>Digital files after they have been downloaded, unless faulty.</li>
         </ul>
         <h2>How</h2>
-        <p>Email help@latent.market with your order number. Your payment is held until delivery, so refunds are quick. Refunds go back to your original payment method in 5–10 business days.</p>
+        <p>Email {BRAND.supportEmail} with your order number. Your payment is held until delivery, so refunds are quick. Refunds go back to your original payment method in 5–10 business days.</p>
       </>
     ),
   },
@@ -122,7 +123,7 @@ export const LEGAL: Record<string, { title: string; updated: string; body: React
     updated: "2 October 2026",
     body: (
       <>
-        <p>These may not be sold on Latent.Market. Listings that break these rules are removed, and repeated violations close the shop.</p>
+        <p>These may not be sold on Synthora. Listings that break these rules are removed, and repeated violations close the shop.</p>
         <ul>
           <li>Anything not made with AI, or with a false or missing AI disclosure.</li>
           <li>Copies or close imitations of another artist&apos;s work; designs using trademarks, logos, brand names, or copyrighted characters you don&apos;t own (including &ldquo;in the style of&rdquo; a named living artist where it imitates identifiable works).</li>

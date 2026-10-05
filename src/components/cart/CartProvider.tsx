@@ -24,7 +24,7 @@ interface CartContextValue {
 }
 
 const CartContext = createContext<CartContextValue | null>(null);
-const KEY = "lm_cart_v1";
+const KEY = "synthora_cart_v1";
 
 function read(): CartLine[] {
   try {

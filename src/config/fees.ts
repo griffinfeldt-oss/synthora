@@ -11,7 +11,7 @@ export const FEES = {
   /** Seller plan, billed through Stripe Billing. */
   subscription: {
     monthlyCents: 300,
-    productName: "Latent.Market seller plan",
+    productName: "Synthora seller plan",
     /** Listings pause (never delete) while the plan is in one of these states. */
     pauseListingsWhen: ["PAST_DUE", "UNPAID", "CANCELED", "INCOMPLETE"] as const,
   },

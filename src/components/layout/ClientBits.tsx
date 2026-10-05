@@ -29,7 +29,7 @@ export function ThemeToggle() {
   const [theme, setTheme] = useState<Theme>("system");
   useEffect(() => {
     try {
-      setTheme((localStorage.getItem("lm-theme") as Theme) || "system");
+      setTheme((localStorage.getItem("synthora-theme") as Theme) || "system");
     } catch {
       // ignore
     }
@@ -37,8 +37,8 @@ export function ThemeToggle() {
   const apply = (t: Theme) => {
     setTheme(t);
     try {
-      if (t === "system") localStorage.removeItem("lm-theme");
-      else localStorage.setItem("lm-theme", t);
+      if (t === "system") localStorage.removeItem("synthora-theme");
+      else localStorage.setItem("synthora-theme", t);
     } catch {
       // ignore
     }
