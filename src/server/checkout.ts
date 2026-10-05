@@ -278,7 +278,7 @@ export async function startCheckout(input: {
   );
   for (const s of priced.sellers) {
     if (s.shippingCents > 0) {
-      lines.push({ name: `Shipping from ${s.seller.shopName}`, description: "", imageUrl: undefined, unitAmountCents: s.shippingCents, quantity: 1 });
+      lines.push({ name: `Shipping from ${s.seller.shopName}`, imageUrl: undefined, unitAmountCents: s.shippingCents, quantity: 1 });
     }
   }
 

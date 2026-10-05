@@ -50,7 +50,7 @@ Demo accounts (all use the password `synthora-demo`, set in `prisma/seed.ts`; se
 Demo mode fakes Stripe. To try the real thing with test cards:
 
 1. In the Stripe Dashboard (test mode), turn on **Connect** (Connect → Get started → Platform/marketplace, Express accounts). Without this, seller payout setup fails.
-2. Copy your **secret** key (Developers → API keys → `sk_test_…`) into `.env` as `STRIPE_SECRET_KEY`. The publishable key (`pk_test_…`) isn't needed: buyers pay on Stripe Checkout.
+2. Copy your **secret** key (Developers → API keys → `sk_test_…`, or a restricted `rk_test_…` key with write access) into `.env` as `STRIPE_SECRET_KEY`. The publishable key (`pk_test_…`) isn't needed: buyers pay on Stripe Checkout.
 3. Forward webhooks to your computer. Once: `stripe login`. Then, in a second terminal while `npm run dev` runs:
    ```bash
    npm run stripe:listen

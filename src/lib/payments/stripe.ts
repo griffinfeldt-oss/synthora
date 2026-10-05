@@ -37,7 +37,8 @@ export class StripeGateway implements PaymentGateway {
             unit_amount: l.unitAmountCents,
             product_data: {
               name: l.name,
-              description: l.description,
+              // Stripe rejects empty strings, so omit blank descriptions.
+              description: l.description?.trim() || undefined,
               images: l.imageUrl?.startsWith("https://") ? [l.imageUrl] : undefined,
             },
           },
