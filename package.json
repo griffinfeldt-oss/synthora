@@ -15,6 +15,7 @@
     "typecheck": "npm run gen && tsc --noEmit",
     "test": "npm run gen && vitest run",
     "test:watch": "npm run gen && vitest",
+    "stripe:listen": "stripe listen --latest --events checkout.session.completed,checkout.session.async_payment_succeeded,checkout.session.expired,charge.refunded,charge.dispute.created,charge.dispute.closed,customer.subscription.created,customer.subscription.updated,customer.subscription.deleted,invoice.paid,invoice.payment_failed,account.updated --forward-to localhost:3000/api/webhooks/stripe --forward-connect-to localhost:3000/api/webhooks/stripe",
     "setup": "node scripts/setup.mjs",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",

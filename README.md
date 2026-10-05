@@ -45,6 +45,22 @@ Demo accounts (all use the password `synthora-demo`, set in `prisma/seed.ts`; se
 - **Lapse a subscription.** Seller → *Earnings & billing* → *Manage billing* → *Simulate a failed renewal*. Listings pause (not delete); paying restores them.
 - **Release payouts.** Buyer confirms delivery on the order page (or wait out the hold window), then Admin → *Run payout release now*.
 
+### Using real Stripe in test mode (locally)
+
+Demo mode fakes Stripe. To try the real thing with test cards:
+
+1. In the Stripe Dashboard (test mode), turn on **Connect** (Connect → Get started → Platform/marketplace, Express accounts). Without this, seller payout setup fails.
+2. Copy your **secret** key (Developers → API keys → `sk_test_…`) into `.env` as `STRIPE_SECRET_KEY`. The publishable key (`pk_test_…`) isn't needed: buyers pay on Stripe Checkout.
+3. Forward webhooks to your computer. Once: `stripe login`. Then, in a second terminal while `npm run dev` runs:
+   ```bash
+   npm run stripe:listen
+   ```
+   It prints a signing secret (`whsec_…`). Put it in `.env` as `STRIPE_WEBHOOK_SECRET`, then restart `npm run dev`.
+4. Sign up as a **new** seller and go through Stripe's onboarding with its test data (SSN `000-00-0000`, routing `110000000`, account `000123456789`). The seeded demo sellers have fake Stripe accounts, so payouts to them will fail. New shops start as *pending*: approve them as `admin@synthora.market` in Admin → Sellers.
+5. Buy with card `4242 4242 4242 4242`, any future date, any CVC.
+
+With a Stripe key set, the orange demo banner and the `/mock/stripe` pages turn off. Remove the key to go back to demo mode.
+
 ---
 
 ## Scripts
@@ -59,6 +75,7 @@ Demo accounts (all use the password `synthora-demo`, set in `prisma/seed.ts`; se
 | `npm run db:deploy` | Apply migrations in production (`prisma migrate deploy`) |
 | `npm run db:seed` | Wipe and load demo data (dev only) |
 | `npm run gen` | Rebuild the adapter registries from `src/fulfillment/adapters` and `src/ai/*` |
+| `npm run stripe:listen` | Forward Stripe test-mode webhooks to localhost (needs the Stripe CLI and `stripe login`) |
 
 Tests need the `synthora_test` database. Docker Compose creates it; with your own Postgres run `createdb -O synthora synthora_test`, or set `DATABASE_URL_TEST`.
 
