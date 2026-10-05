@@ -1,0 +1,662 @@
+// Latent.Market data model.
+// Money is always stored as integer cents in the listing currency (USD).
+// Fulfillment partner ids are plain strings so a new adapter needs no schema change.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ─── Accounts (Auth.js) ──────────────────────────────────────────────────────
+
+enum Role {
+  BUYER
+  ADMIN
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  passwordHash  String?
+  emailVerified DateTime?
+  image         String?
+  role          Role      @default(BUYER)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts      Account[]
+  sessions      Session[]
+  seller        Seller?
+  orders        Order[]
+  reviews       Review[]
+  reports       Report[]
+  notifications Notification[]
+}
+
+model Account {
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([provider, providerAccountId])
+}
+
+model Session {
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@id([identifier, token])
+}
+
+// ─── Sellers ─────────────────────────────────────────────────────────────────
+
+enum SellerStatus {
+  PENDING
+  APPROVED
+  SUSPENDED
+}
+
+enum SubscriptionStatus {
+  NONE
+  INCOMPLETE
+  ACTIVE
+  PAST_DUE
+  UNPAID
+  CANCELED
+}
+
+model Seller {
+  id                   String             @id @default(cuid())
+  userId               String             @unique
+  user                 User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  shopName             String
+  slug                 String             @unique
+  bio                  String?            @db.Text
+  location             String?
+  status               SellerStatus       @default(PENDING)
+  statusReason         String?
+
+  // Stripe Connect Express (payouts)
+  stripeAccountId      String?            @unique
+  chargesEnabled       Boolean            @default(false)
+  payoutsEnabled       Boolean            @default(false)
+  detailsSubmitted     Boolean            @default(false)
+
+  // Stripe Billing ($3/month plan)
+  stripeCustomerId     String?            @unique
+  subscriptionId       String?            @unique
+  subscriptionStatus   SubscriptionStatus @default(NONE)
+  currentPeriodEnd     DateTime?
+
+  // Onboarding choices
+  offersSelfShip       Boolean            @default(false)
+  offersDigital        Boolean            @default(false)
+  defaultShipFrom      Json?
+
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  partners             PartnerConnection[]
+  listings             Listing[]
+  sellerOrders         SellerOrder[]
+  payouts              Payout[]
+  generations          Generation[]
+  ledger               LedgerEntry[]
+}
+
+enum PartnerAuthType {
+  API_KEY
+  OAUTH
+  NONE
+}
+
+enum ConnectionStatus {
+  ACTIVE
+  ERROR
+  REVOKED
+}
+
+// A seller's own account at a fulfillment partner. Credentials are AES-256-GCM encrypted.
+model PartnerConnection {
+  id                   String           @id @default(cuid())
+  sellerId             String
+  seller               Seller           @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  provider             String
+  authType             PartnerAuthType
+  encryptedCredentials String           @db.Text
+  accountLabel         String?
+  externalShopId       String?
+  status               ConnectionStatus @default(ACTIVE)
+  lastError            String?
+  mock                 Boolean          @default(false)
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+  listings             Listing[]
+
+  @@unique([sellerId, provider])
+}
+
+// ─── Listings ────────────────────────────────────────────────────────────────
+
+enum ListingStatus {
+  DRAFT
+  PENDING_REVIEW
+  ACTIVE
+  PAUSED          // paused by the seller
+  PAUSED_BILLING  // paused because the $3/month plan lapsed
+  SUSPENDED       // suspended by an admin
+  REMOVED         // taken down (e.g. IP notice); kept for records
+}
+
+enum ListingKind {
+  PARTNER   // print-on-demand through the seller's partner account
+  SELF_SHIP // the seller ships it and enters tracking
+  DIGITAL   // secure download after payment
+}
+
+enum AiInvolvement {
+  FULL      // fully AI-made
+  ASSISTED  // AI-made, then edited or finished by the seller
+}
+
+model Listing {
+  id                   String             @id @default(cuid())
+  sellerId             String
+  seller               Seller             @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  slug                 String             @unique
+  title                String
+  description          String             @db.Text
+  priceCents           Int
+  currency             String             @default("usd")
+  status               ListingStatus      @default(DRAFT)
+  statusReason         String?
+  kind                 ListingKind
+  productType          String
+  category             String
+  tags                 String[]
+
+  // AI disclosure (required on every listing)
+  aiTool               String
+  aiInvolvement        AiInvolvement      @default(FULL)
+  howMade              String             @db.Text
+  prompt               String?            @db.Text
+  generationId         String?
+
+  // Fulfillment
+  provider             String             // adapter id: printify | printful | gelato | self | digital | ...
+  partnerConnectionId  String?
+  partnerConnection    PartnerConnection? @relation(fields: [partnerConnectionId], references: [id], onDelete: SetNull)
+  partnerProductId     String?
+  partnerData          Json?              // adapter-specific (print provider id, placement, design file url…)
+  baseCostCents        Int                @default(0) // partner production cost (billed to the seller by the partner)
+  shippingCents        Int?               // self-ship flat rate per order
+  processingDays       Int                @default(3)
+  inventory            Int?               // self-ship stock; null = made to order
+
+  rightsConfirmedAt    DateTime?
+  ratingAvg            Float              @default(0)
+  ratingCount          Int                @default(0)
+  salesCount           Int                @default(0)
+  publishedAt          DateTime?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  variants             ListingVariant[]
+  images               ListingImage[]
+  digitalAsset         DigitalAsset?
+  orderItems           OrderItem[]
+  reviews              Review[]
+  reports              Report[]
+  takedowns            TakedownRequest[]
+
+  @@index([status, category])
+  @@index([status, productType])
+  @@index([status, aiTool])
+}
+
+model ListingVariant {
+  id               String      @id @default(cuid())
+  listingId        String
+  listing          Listing     @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  name             String      // e.g. "M / Black"
+  partnerVariantId String?
+  baseCostCents    Int         @default(0)
+  priceCents       Int?        // overrides listing price when set
+  position         Int         @default(0)
+  orderItems       OrderItem[]
+}
+
+enum ImageKind {
+  PHOTO           // uploaded by the seller
+  DESIGN          // the raw AI design
+  MOCKUP_PARTNER  // returned by the partner's mockup API
+  MOCKUP_RENDER   // rendered by our own mockup renderer from `mockup`
+}
+
+model ListingImage {
+  id        String    @id @default(cuid())
+  listingId String
+  listing   Listing   @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  url       String
+  alt       String
+  kind      ImageKind @default(PHOTO)
+  mockup    Json?     // { productType, color, designUrl } for MOCKUP_RENDER
+  position  Int       @default(0)
+}
+
+model DigitalAsset {
+  id          String   @id @default(cuid())
+  listingId   String   @unique
+  listing     Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  storageKey  String
+  fileName    String
+  contentType String
+  sizeBytes   Int
+  createdAt   DateTime @default(now())
+}
+
+// Every AI image generation, kept as provenance for "how it was made".
+model Generation {
+  id          String   @id @default(cuid())
+  sellerId    String
+  seller      Seller   @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  model       String
+  prompt      String   @db.Text
+  productType String
+  images      Json     // [{ url, seed }]
+  createdAt   DateTime @default(now())
+}
+
+// ─── Orders ──────────────────────────────────────────────────────────────────
+
+enum OrderStatus {
+  PENDING_PAYMENT
+  PAID
+  FULFILLING
+  COMPLETED
+  CANCELED
+  PARTIALLY_REFUNDED
+  REFUNDED
+  DISPUTED
+}
+
+// One buyer checkout. May span several sellers (one SellerOrder each).
+model Order {
+  id                      String        @id @default(cuid())
+  number                  String        @unique
+  buyerId                 String?
+  buyer                   User?         @relation(fields: [buyerId], references: [id], onDelete: SetNull)
+  email                   String
+  status                  OrderStatus   @default(PENDING_PAYMENT)
+  shippingAddress         Json?
+  currency                String        @default("usd")
+  subtotalCents           Int
+  shippingCents           Int
+  totalCents              Int
+  processingFeeCents      Int?          // actual Stripe fee once known
+  refundedCents           Int           @default(0)
+  accessToken             String        @unique // lets guests open their order page
+  stripeCheckoutSessionId String?       @unique
+  stripePaymentIntentId   String?       @unique
+  stripeChargeId          String?       @unique
+  paidAt                  DateTime?
+  createdAt               DateTime      @default(now())
+  updatedAt               DateTime      @updatedAt
+
+  sellerOrders            SellerOrder[]
+  items                   OrderItem[]
+  ledger                  LedgerEntry[]
+  disputes                Dispute[]
+}
+
+enum SellerOrderStatus {
+  PENDING       // awaiting payment
+  PAID          // paid, fulfillment not yet started
+  IN_PRODUCTION
+  SHIPPED
+  DELIVERED
+  COMPLETED     // buyer confirmed or hold window passed
+  ACTION_NEEDED // partner order failed; seller must act
+  CANCELED
+  REFUNDED
+}
+
+enum PayoutStatus {
+  NOT_READY // order not paid
+  HELD      // waiting for delivery confirmation / hold window
+  ELIGIBLE  // hold passed; next payout run will transfer
+  PAID
+  REVERSED
+  CANCELED
+  BLOCKED   // dispute open or seller cannot receive payouts
+}
+
+// The part of an order that belongs to one seller. Payouts are per SellerOrder.
+model SellerOrder {
+  id                 String            @id @default(cuid())
+  orderId            String
+  order              Order             @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  sellerId           String
+  seller             Seller            @relation(fields: [sellerId], references: [id])
+  status             SellerOrderStatus @default(PENDING)
+
+  itemsCents         Int
+  shippingCents      Int
+  commissionCents    Int
+  processingFeeCents Int
+  partnerCostCents   Int               // estimate; paid by the seller to their partner
+  netCents           Int               // what we transfer to the seller
+  refundedCents      Int               @default(0)
+
+  payoutStatus       PayoutStatus      @default(NOT_READY)
+  payoutEligibleAt   DateTime?
+  buyerConfirmedAt   DateTime?
+  deliveredAt        DateTime?
+  completedAt        DateTime?
+
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  items              OrderItem[]
+  fulfillments       Fulfillment[]
+  payouts            Payout[]
+  ledger             LedgerEntry[]
+
+  @@index([sellerId, status])
+  @@index([payoutStatus, payoutEligibleAt])
+}
+
+enum FulfillmentStatus {
+  PENDING
+  SUBMITTED
+  IN_PRODUCTION
+  SHIPPED
+  DELIVERED
+  FAILED
+  CANCELED
+}
+
+// One partner order (or one self-ship parcel, or one digital delivery) inside a SellerOrder.
+model Fulfillment {
+  id              String            @id @default(cuid())
+  sellerOrderId   String
+  sellerOrder     SellerOrder       @relation(fields: [sellerOrderId], references: [id], onDelete: Cascade)
+  provider        String
+  connectionId    String?
+  partnerOrderId  String?
+  status          FulfillmentStatus @default(PENDING)
+  trackingNumber  String?
+  trackingCarrier String?
+  trackingUrl     String?
+  shippedAt       DateTime?
+  deliveredAt     DateTime?
+  failureReason   String?
+  attempts        Int               @default(0)
+  raw             Json?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  items           OrderItem[]
+
+  @@unique([provider, partnerOrderId])
+}
+
+model OrderItem {
+  id               String          @id @default(cuid())
+  orderId          String
+  order            Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  sellerOrderId    String
+  sellerOrder      SellerOrder     @relation(fields: [sellerOrderId], references: [id], onDelete: Cascade)
+  fulfillmentId    String?
+  fulfillment      Fulfillment?    @relation(fields: [fulfillmentId], references: [id], onDelete: SetNull)
+  listingId        String
+  listing          Listing         @relation(fields: [listingId], references: [id])
+  variantId        String?
+  variant          ListingVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+  title            String
+  variantName      String?
+  imageUrl         String?
+  provider         String
+  quantity         Int
+  unitPriceCents   Int
+  baseCostCents    Int
+  downloadCount    Int             @default(0)
+  review           Review?
+}
+
+// ─── Money trail ─────────────────────────────────────────────────────────────
+
+enum PayoutTransferStatus {
+  PENDING
+  PAID
+  FAILED
+  REVERSED
+}
+
+model Payout {
+  id               String               @id @default(cuid())
+  sellerId         String
+  seller           Seller               @relation(fields: [sellerId], references: [id])
+  sellerOrderId    String
+  sellerOrder      SellerOrder          @relation(fields: [sellerOrderId], references: [id])
+  amountCents      Int
+  currency         String               @default("usd")
+  stripeTransferId String?              @unique
+  status           PayoutTransferStatus @default(PENDING)
+  failureReason    String?
+  reversedCents    Int                  @default(0)
+  createdAt        DateTime             @default(now())
+}
+
+enum LedgerType {
+  CHARGE              // buyer paid the platform
+  SELLER_SALE         // seller's gross share (items + shipping)
+  COMMISSION          // platform commission (8%)
+  PROCESSING_FEE      // card processing passed through to the seller at cost
+  PAYOUT              // transfer to the seller's Connect account
+  REFUND              // money returned to the buyer
+  COMMISSION_REVERSAL // commission given back on a refund
+  TRANSFER_REVERSAL   // money pulled back from the seller
+  DISPUTE             // chargeback hold
+  SUBSCRIPTION        // $3/month seller plan
+  ADJUSTMENT
+}
+
+// Append-only record of every money movement. Amounts are signed from the point of
+// view of `account`: PLATFORM (our revenue), SELLER (owed to the seller), BUYER, STRIPE.
+model LedgerEntry {
+  id            String       @id @default(cuid())
+  type          LedgerType
+  account       String
+  amountCents   Int
+  currency      String       @default("usd")
+  sellerId      String?
+  seller        Seller?      @relation(fields: [sellerId], references: [id])
+  orderId       String?
+  order         Order?       @relation(fields: [orderId], references: [id])
+  sellerOrderId String?
+  sellerOrder   SellerOrder? @relation(fields: [sellerOrderId], references: [id])
+  stripeRef     String?
+  memo          String?
+  createdAt     DateTime     @default(now())
+
+  @@index([type, createdAt])
+  @@index([sellerId])
+}
+
+enum DisputeStatus {
+  OPEN
+  WON
+  LOST
+}
+
+model Dispute {
+  id              String        @id @default(cuid())
+  orderId         String
+  order           Order         @relation(fields: [orderId], references: [id])
+  stripeDisputeId String        @unique
+  amountCents     Int
+  reason          String?
+  status          DisputeStatus @default(OPEN)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+}
+
+// ─── Trust & safety ──────────────────────────────────────────────────────────
+
+enum ReviewStatus {
+  VISIBLE
+  HIDDEN
+}
+
+model Review {
+  id          String       @id @default(cuid())
+  listingId   String
+  listing     Listing      @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  orderItemId String       @unique
+  orderItem   OrderItem    @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  buyerId     String
+  buyer       User         @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  rating      Int
+  body        String       @db.Text
+  status      ReviewStatus @default(VISIBLE)
+  createdAt   DateTime     @default(now())
+}
+
+enum ReportReason {
+  NOT_AI_MADE
+  IP_INFRINGEMENT
+  PROHIBITED_ITEM
+  MISLEADING
+  OFFENSIVE
+  SCAM
+  OTHER
+}
+
+enum CaseStatus {
+  OPEN
+  ACTIONED
+  DISMISSED
+}
+
+model Report {
+  id         String       @id @default(cuid())
+  listingId  String
+  listing    Listing      @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  reporterId String?
+  reporter   User?        @relation(fields: [reporterId], references: [id], onDelete: SetNull)
+  email      String?
+  reason     ReportReason
+  details    String       @db.Text
+  status     CaseStatus   @default(OPEN)
+  adminNote  String?
+  createdAt  DateTime     @default(now())
+  resolvedAt DateTime?
+}
+
+enum TakedownStatus {
+  RECEIVED
+  LISTING_REMOVED
+  REJECTED
+  COUNTER_NOTICE
+  RESTORED
+}
+
+// Copyright / IP notice (DMCA-style). Flow is in src/server/takedowns.ts.
+model TakedownRequest {
+  id               String         @id @default(cuid())
+  listingId        String?
+  listing          Listing?       @relation(fields: [listingId], references: [id], onDelete: SetNull)
+  listingUrl       String
+  claimantName     String
+  claimantEmail    String
+  claimantAddress  String?
+  rightsOwner      String
+  workDescription  String         @db.Text
+  infringementNote String         @db.Text
+  goodFaith        Boolean
+  accurate         Boolean
+  signature        String
+  status           TakedownStatus @default(RECEIVED)
+  counterNotice    String?        @db.Text
+  adminNote        String?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+}
+
+// ─── Plumbing ────────────────────────────────────────────────────────────────
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String
+  title     String
+  body      String
+  href      String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, readAt])
+}
+
+model EmailOutbox {
+  id        String    @id @default(cuid())
+  to        String
+  subject   String
+  text      String    @db.Text
+  provider  String
+  sentAt    DateTime?
+  error     String?
+  createdAt DateTime  @default(now())
+}
+
+// Idempotency for incoming webhooks.
+model WebhookEvent {
+  id          String   @id // provider:event-id
+  source      String
+  type        String
+  processedAt DateTime @default(now())
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  action     String
+  targetType String
+  targetId   String
+  meta       Json?
+  createdAt  DateTime @default(now())
+}
+
+model Subscriber {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  createdAt DateTime @default(now())
+}

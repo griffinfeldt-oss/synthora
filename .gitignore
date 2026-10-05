@@ -1,0 +1,14 @@
+node_modules
+.next
+out
+coverage
+.data
+*.tsbuildinfo
+next-env.d.ts
+.env
+.env.local
+.env.*.local
+.vercel
+.DS_Store
+src/fulfillment/registry.generated.ts
+src/ai/*-registry.generated.ts

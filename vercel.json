@@ -1,0 +1,6 @@
+{
+  "crons": [
+    { "path": "/api/cron/release-payouts", "schedule": "0 14 * * *" },
+    { "path": "/api/cron/sync-fulfillments", "schedule": "0 * * * *" }
+  ]
+}
