@@ -44,11 +44,13 @@ export function configChecks(): Check[] {
   if (env.mode === "test") {
     add({ id: "stripe-test-key", label: "Stripe test key set", ok: keyMode === "test", severity: "block" });
     add({ id: "stripe-webhook", label: "Stripe webhook secret set", ok: Boolean(env.stripeWebhookSecret), severity: "warn" });
+    add({ id: "stripe-tax-ready", label: "Stripe Tax sandbox configured", ok: process.env.STRIPE_TAX_READY === "true", detail: "Add the head office address in Stripe Tax settings, then test a taxed checkout. Set STRIPE_TAX_READY=true after verification.", severity: "warn" });
   }
 
   if (live) {
     add({ id: "stripe-live-key", label: "Stripe live key", ok: keyMode === "live", detail: "STRIPE_SECRET_KEY must start with sk_live_ or rk_live_.", severity: "block" });
     add({ id: "stripe-webhook", label: "Stripe webhook secret", ok: Boolean(env.stripeWebhookSecret), severity: "block" });
+    add({ id: "stripe-tax-ready", label: "Stripe Tax registrations and product codes verified", ok: process.env.STRIPE_TAX_READY === "true", detail: "Set STRIPE_TAX_READY=true only after the business address, registrations, product codes, and a taxed purchase/refund have been reviewed in Stripe.", severity: "block" });
     add({ id: "no-mock-mode", label: "No forced mocks", ok: !mock.all && !mock.fulfillment, detail: "MOCK_MODE and FULFILLMENT_MOCK must be off.", severity: "block" });
     add({ id: "auth-secret", label: "AUTH_SECRET (32+ characters)", ok: env.authSecret.length >= 32, severity: "block" });
     add({ id: "encryption-key", label: "ENCRYPTION_KEY (32 bytes)", ok: encryptionKeyOk(), severity: "block" });

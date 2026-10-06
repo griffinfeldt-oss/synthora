@@ -70,7 +70,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
                     </td>
                     <td>{formatDate(o.createdAt)}</td>
                     <td className="max-w-[260px] truncate">{o.items.map((i) => i.title).join(", ")}</td>
-                    <td>{formatMoney(o.totalCents)}</td>
+                    <td>{formatMoney(o.totalCents + o.taxCents)}</td>
                     <td>
                       <Pill tone={o.status === "COMPLETED" ? "ok" : o.status === "FULFILLING" ? "signal" : "neutral"}>{ORDER_LABEL[o.status] ?? o.status}</Pill>
                     </td>

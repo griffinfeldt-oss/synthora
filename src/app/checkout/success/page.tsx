@@ -26,7 +26,7 @@ export default async function SuccessPage({ searchParams }: { searchParams: Prom
       <Container className="mt-12 max-w-2xl text-center">
         {paid ? (
           <p className="text-[17px]">
-            We received <strong>{formatMoney(order.totalCents)}</strong>. A receipt is on its way to {order.email}.{" "}
+            We received <strong>{formatMoney(order.totalCents + order.taxCents)}</strong>. A receipt is on its way to {order.email}.{" "}
             {allDigital ? "Your files are ready on your order page." : anyDigital ? "Your files are ready on your order page, and the sellers are preparing the rest." : "The sellers have been told and are preparing your order."}
           </p>
         ) : (

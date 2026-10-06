@@ -12,6 +12,7 @@ export interface CheckoutLine {
   imageUrl?: string | null;
   unitAmountCents: number;
   quantity: number;
+  taxCode?: string;
 }
 
 export interface ConnectAccountState {
@@ -34,6 +35,7 @@ export interface PaymentGateway {
     orderId: string;
     orderNumber: string;
     email: string;
+    shipTo?: { name: string; line1: string; line2?: string | null; city: string; state?: string | null; postalCode: string; country: string } | null;
     lines: CheckoutLine[];
     successUrl: string;
     cancelUrl: string;

@@ -57,8 +57,8 @@ export default async function AdminOrders({ searchParams }: { searchParams: Prom
               </td>
               <td className="text-[13px]">{o.email}</td>
               <td className="text-[13px]">{o.sellerOrders.map((s) => s.seller.shopName).join(", ")}</td>
-              <td>{formatMoney(o.totalCents)}</td>
-              <td>{o.refundedCents ? formatMoney(o.refundedCents) : "—"}</td>
+              <td>{formatMoney(o.totalCents + o.taxCents)}</td>
+              <td>{o.refundedCents ? formatMoney(o.refundedCents + o.taxRefundedCents) : "—"}</td>
               <td>
                 <Pill tone={o.status === "COMPLETED" ? "ok" : o.status === "DISPUTED" ? "danger" : "neutral"}>{o.status.replaceAll("_", " ").toLowerCase()}</Pill>
               </td>

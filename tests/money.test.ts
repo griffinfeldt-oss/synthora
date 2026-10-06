@@ -12,7 +12,7 @@ const { startCheckout } = await import("@/server/checkout");
 const { markOrderPaid, cancelPendingOrder, reconcileOrderFee } = await import("@/server/orders");
 const { releaseDuePayouts, payOutSellerOrder } = await import("@/server/payouts");
 const { confirmDelivery } = await import("@/server/fulfillment");
-const { applyRefund } = await import("@/server/refunds");
+const { applyRefund, syncExternalRefund } = await import("@/server/refunds");
 const { runJobs } = await import("@/server/jobs");
 const { recoverOperations, resolveByHand } = await import("@/server/resolution");
 const { runReconciliation } = await import("@/server/reconcile");
@@ -95,6 +95,15 @@ describe("paid orders survive crashes (SYN-004)", () => {
 });
 
 describe("verified payments only (PAY-01)", () => {
+  it("holds a digital checkout paid from outside the US for review", async () => {
+    const seller = await makeSeller("country-check", { digital: true });
+    const listingId = await approvedListing(seller.id, "digital", 900, "digital_art");
+    const { orderId } = await startCheckout({ items: [{ listingId, quantity: 1 }], shipTo: null, email: "b@test.local", buyerId: null });
+    const result = await markOrderPaid({ orderId, paymentIntentId: `pi_${orderId}`, amountCents: 900, taxCents: 0, billingCountry: "CA", currency: "usd" });
+    expect(result.mismatch).toBe(true);
+    expect((await db.order.findUniqueOrThrow({ where: { id: orderId } })).status).toBe("PENDING_PAYMENT");
+    expect(await db.entitlement.count()).toBe(0);
+  });
   it("a payment that does not match the order releases nothing and goes to a person", async () => {
     const s = await makeSeller("alpha", { digital: true });
     const id = await approvedListing(s.id, "digital", 900, "digital_art");
@@ -211,6 +220,33 @@ describe("payouts (SYN-005)", () => {
 });
 
 describe("refunds and seller debt (SYN-005, SYN-006)", () => {
+  it("keeps Stripe Tax out of seller earnings and refunds tax alongside each seller's sale", async () => {
+    const a = await makeSeller("tax-a", { digital: true });
+    const b = await makeSeller("tax-b", { digital: true });
+    const one = await approvedListing(a.id, "digital", 900, "digital_art");
+    const two = await approvedListing(b.id, "digital", 1100, "digital_art");
+    const { orderId } = await startCheckout({ items: [{ listingId: one, quantity: 1 }, { listingId: two, quantity: 1 }], shipTo: null, email: "buyer@test.local", buyerId: null });
+    await markOrderPaid({ orderId, paymentIntentId: `pi_${orderId}`, feeCents: 100, amountCents: 2101, taxCents: 101, currency: "usd" });
+    const order = await db.order.findUniqueOrThrow({ where: { id: orderId }, include: { sellerOrders: true } });
+    expect(order.taxCents).toBe(101);
+    expect(order.sellerOrders.reduce((sum, so) => sum + so.taxCents, 0)).toBe(101);
+    expect((await db.ledgerEntry.aggregate({ where: { orderId, account: "TAX" }, _sum: { amountCents: true } }))._sum.amountCents).toBe(101);
+    expect((await runReconciliation()).status).toBe("OK");
+
+    const first = order.sellerOrders.find((so) => so.sellerId === a.id)!;
+    await applyRefund({ sellerOrderId: first.id, amountCents: 300, reason: "case reviewed", source: "admin" });
+    await applyRefund({ sellerOrderId: first.id, reason: "case reviewed", source: "admin" });
+    expect(gw.refunds.reduce((sum, r) => sum + r.amountCents, 0)).toBe(900 + first.taxCents);
+    expect((await db.sellerOrder.findUniqueOrThrow({ where: { id: first.id } })).taxRefundedCents).toBe(first.taxCents);
+    expect((await runReconciliation()).status).toBe("OK");
+
+    const second = order.sellerOrders.find((so) => so.sellerId === b.id)!;
+    await syncExternalRefund(`pi_${orderId}`, 2101);
+    expect((await db.sellerOrder.findUniqueOrThrow({ where: { id: second.id } })).taxRefundedCents).toBe(second.taxCents);
+    const after = await db.order.findUniqueOrThrow({ where: { id: orderId } });
+    expect(after.refundedCents + after.taxRefundedCents).toBe(2101);
+    expect((await runReconciliation()).status).toBe("OK");
+  });
   it("two simultaneous full refunds cannot refund twice", async () => {
     const s = await makeSeller("alpha", { digital: true });
     const id = await approvedListing(s.id, "digital", 900, "digital_art");

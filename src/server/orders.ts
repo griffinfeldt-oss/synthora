@@ -10,6 +10,7 @@
  */
 import "server-only";
 import { FEES } from "@/config/fees";
+import { LAUNCH } from "@/config/launch";
 import { db } from "@/lib/db";
 import { allocateProportionally, estimateProcessingFee, splitOrder } from "@/lib/fees";
 import { payments } from "@/lib/payments";
@@ -27,6 +28,9 @@ export interface PaidInput {
   feeCents?: number | null;
   /** What the processor says was paid. Must match the order exactly. */
   amountCents?: number | null;
+  taxCents?: number | null;
+  /** Country collected by Stripe Checkout; present for signed Stripe events. */
+  billingCountry?: string | null;
   currency?: string | null;
 }
 
@@ -36,7 +40,7 @@ export function orderJobKeys(orderId: string, fulfillmentIds: string[]): string[
 
 /** A payment that does not match its order is held for a person, never fulfilled. */
 async function holdMismatchedPayment(order: { id: string; number: string; totalCents: number; currency: string }, input: PaidInput) {
-  const payload = { orderId: order.id, paymentIntentId: input.paymentIntentId, expectedCents: order.totalCents, expectedCurrency: order.currency, paidCents: input.amountCents ?? null, paidCurrency: input.currency ?? null };
+  const payload = { orderId: order.id, paymentIntentId: input.paymentIntentId, expectedPreTaxCents: order.totalCents, expectedCurrency: order.currency, paidCents: input.amountCents ?? null, paidTaxCents: input.taxCents ?? null, paidCurrency: input.currency ?? null, billingCountry: input.billingCountry ?? null };
   await db.operation.createMany({
     data: [
       {
@@ -46,7 +50,7 @@ async function holdMismatchedPayment(order: { id: string; number: string; totalC
         payloadHash: payloadHash(payload),
         payload,
         orderId: order.id,
-        lastError: `Paid ${input.amountCents ?? "?"} ${input.currency ?? "?"}, expected ${order.totalCents} ${order.currency}. Nothing was released.`,
+        lastError: `Payment, tax, currency or buyer country could not be verified. Paid ${input.amountCents ?? "?"} ${input.currency ?? "?"}, tax ${input.taxCents ?? "?"}, pre-tax ${order.totalCents} ${order.currency}, country ${input.billingCountry ?? "?"}. Nothing was released.`,
         ownerRole: "finance",
         escalateAt: new Date(),
       },
@@ -70,9 +74,11 @@ export async function markOrderPaid(input: PaidInput): Promise<{ alreadyPaid: bo
     return { alreadyPaid: true };
   }
 
+  const taxCents = input.taxCents ?? 0;
   if (input.amountCents !== undefined && input.amountCents !== null) {
     const currency = (input.currency ?? FEES.currency).toLowerCase();
-    if (input.amountCents !== order.totalCents || currency !== order.currency.toLowerCase()) {
+    const outsideTerritory = !order.shippingAddress && input.billingCountry !== undefined && !LAUNCH.territory.buyerCountries.includes((input.billingCountry ?? "").toUpperCase());
+    if (!Number.isSafeInteger(taxCents) || taxCents < 0 || input.amountCents !== order.totalCents + taxCents || currency !== order.currency.toLowerCase() || outsideTerritory) {
       await holdMismatchedPayment(order, input);
       return { alreadyPaid: false, mismatch: true };
     }
@@ -90,7 +96,7 @@ export async function markOrderPaid(input: PaidInput): Promise<{ alreadyPaid: bo
     }
   }
   const feeStatus = feeCents === null ? "ESTIMATED" : "ACTUAL";
-  feeCents ??= estimateProcessingFee(order.totalCents);
+  feeCents ??= estimateProcessingFee(order.totalCents + taxCents);
 
   const split = splitOrder(
     order.sellerOrders.map((so) => ({
@@ -121,16 +127,19 @@ export async function markOrderPaid(input: PaidInput): Promise<{ alreadyPaid: bo
         stripeChargeId: chargeId,
         processingFeeCents: feeCents,
         processingFeeStatus: feeStatus,
+        taxCents,
       },
     });
     if (res.count === 0) return false;
 
     const rows: LedgerRow[] = [
-      { type: "CHARGE", account: "CASH", amountCents: order.totalCents, orderId: order.id, stripeRef: input.paymentIntentId, memo: `Order ${order.number}` },
+      { type: "CHARGE", account: "CASH", amountCents: order.totalCents + taxCents, orderId: order.id, stripeRef: input.paymentIntentId, memo: `Order ${order.number}` },
+      { type: "SALES_TAX", account: "TAX", amountCents: taxCents, orderId: order.id, memo: "Stripe Tax collected" },
       { type: "PROCESSING_FEE", account: "CASH", amountCents: -feeCents!, orderId: order.id, stripeRef: chargeId, memo: feeStatus === "ACTUAL" ? "Stripe processing fee" : "Stripe processing fee (estimate until Stripe reports it)" },
     ];
 
-    for (const so of order.sellerOrders) {
+    const taxShares = allocateProportionally(taxCents, order.sellerOrders.map((so) => so.itemsCents + so.shippingCents));
+    for (const [sellerIndex, so] of order.sellerOrders.entries()) {
       const share = split.sellers.find((s) => s.sellerId === so.sellerId)!;
       await tx.sellerOrder.update({
         where: { id: so.id },
@@ -140,6 +149,7 @@ export async function markOrderPaid(input: PaidInput): Promise<{ alreadyPaid: bo
           processingFeeCents: share.processingFeeCents,
           commissionCents: share.commissionCents,
           netCents: share.netCents,
+          taxCents: taxShares[sellerIndex],
         },
       });
       const base = { sellerId: so.sellerId, orderId: order.id, sellerOrderId: so.id };
@@ -170,7 +180,7 @@ export async function markOrderPaid(input: PaidInput): Promise<{ alreadyPaid: bo
   });
   if (!claimed) return { alreadyPaid: true };
 
-  await track({ name: "payment_confirmed", orderId: order.id, dedupeKey: `payment_confirmed:${order.id}`, isTest: order.mode !== "live", props: { totalCents: order.totalCents } });
+  await track({ name: "payment_confirmed", orderId: order.id, dedupeKey: `payment_confirmed:${order.id}`, isTest: order.mode !== "live", props: { totalCents: order.totalCents + taxCents, taxCents } });
   await runJobs({ keys: jobs.map((j) => j.key) });
   return { alreadyPaid: false };
 }

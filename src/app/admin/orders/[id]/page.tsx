@@ -29,7 +29,7 @@ export default async function AdminOrder({ params }: { params: Promise<{ id: str
         </Link>
         <h2 className="mt-1 font-serif text-[26px]">Order {order.number}</h2>
         <p className="text-[13.5px] text-muted">
-          {order.email} · {formatDateTime(order.createdAt)} · {order.status.toLowerCase()} · total {formatMoney(order.totalCents)} · Stripe fee {formatMoney(order.processingFeeCents ?? 0)}
+          {order.email} · {formatDateTime(order.createdAt)} · {order.status.toLowerCase()} · total {formatMoney(order.totalCents + order.taxCents)} (tax {formatMoney(order.taxCents)}) · Stripe fee {formatMoney(order.processingFeeCents ?? 0)}
           {order.stripePaymentIntentId ? ` · ${order.stripePaymentIntentId}` : ""}
         </p>
         <Link href={`/orders/${order.id}?t=${order.accessToken}`} className="text-[13px] underline">

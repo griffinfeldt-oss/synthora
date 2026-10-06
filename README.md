@@ -11,7 +11,7 @@ Everything runs with **zero API keys** in demo mode: payments, partners, image g
 - Product requirements: [docs/PRD.md](docs/PRD.md) · Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · Design brief: [docs/DESIGN.md](docs/DESIGN.md)
 - Launch readiness, requirement by requirement: [docs/READINESS.md](docs/READINESS.md) · Metric definitions: [docs/METRICS.md](docs/METRICS.md) · October 2026 product review: [docs/reviews/2026-10-05-complete-review.md](docs/reviews/2026-10-05-complete-review.md)
 
-**Status:** not launched. No real customers, revenue or production traffic. Live mode refuses to start until the launch gates in [src/config/launch.ts](src/config/launch.ts) are signed off (tax, territory, legal review, refund and reserve policy, support and reconciliation owners).
+**Status:** not launched. No real customers, revenue or production traffic. US territory, Stripe Tax, the published returns policy, no extra seller reserve, and support/reconciliation owners are recorded in [src/config/launch.ts](src/config/launch.ts). Legal review remains pending; live mode also requires operational readiness checks.
 
 ---
 
@@ -56,6 +56,7 @@ Verification and password-reset emails are not sent in demo mode; open them in A
 Demo mode fakes Stripe. To try the real thing with test cards:
 
 1. In the Stripe Dashboard (test mode), turn on **Connect** (Connect → Get started → Platform/marketplace, Express accounts). Without this, seller payout setup fails.
+   Open Stripe Tax settings in the sandbox and enter a valid head office address too. Stripe rejects automatic tax Checkout sessions until that address is set; this was the remaining sandbox setup step when this change was tested.
 2. Copy your **secret** key (Developers → API keys → `sk_test_…`, or a restricted `rk_test_…` key with write access) into `.env` as `STRIPE_SECRET_KEY`. The publishable key (`pk_test_…`) isn't needed: buyers pay on Stripe Checkout.
 3. Forward webhooks to your computer. Once: `stripe login`. Then, in a second terminal while `npm run dev` runs:
    ```bash
@@ -155,6 +156,8 @@ Admins: sign up with your email, confirm it, then run `npm run admin:grant -- yo
 1. Activate your Stripe account; set business name, support email, statement descriptor ("SYNTHORA").
 2. **Connect**: Dashboard → Connect → get started → choose **Platform/marketplace**, **Express** accounts, and the "Separate charges and transfers" funds flow. Fill in the platform profile and branding (shown during seller onboarding). Make sure your platform is allowed to onboard sellers in the countries you'll support.
 3. **Billing**: optionally create a Product "Synthora seller plan" with a recurring **$3.00/month** price and set `STRIPE_SUBSCRIPTION_PRICE_ID` (otherwise Checkout creates the price inline). Settings → Billing → Customer portal: enable updating payment methods and canceling.
+   **Tax**: set the platform business address and default product tax code in Stripe Tax. Review the physical goods, digital services and shipping classifications in `src/config/tax.ts` against the actual products. Add only tax registrations you have obtained; Stripe Tax calculates collection where registered but does not itself register you or file/remit returns. The $3 plan uses Stripe Tax as well. If using `STRIPE_SUBSCRIPTION_PRICE_ID`, set that Product's tax code and exclusive tax behavior in Stripe.
+   After a taxed sandbox purchase and refund reconcile, set `STRIPE_TAX_READY=true` in the live deployment. Live mode refuses to start without it.
 4. **Webhooks** (Developers → Webhooks). Set the endpoint API version to `2026-09-30.endive` (the version this SDK uses).
    - Endpoint A, *your account*: `https://<domain>/api/webhooks/stripe`, events: `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed`, `checkout.session.expired`, `charge.refunded`, `charge.dispute.created`, `charge.dispute.closed`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.paid`, `invoice.payment_failed`. Copy its signing secret to `STRIPE_WEBHOOK_SECRET`.
    - Endpoint B, *connected accounts*: same URL, event `account.updated`. Copy its signing secret to `STRIPE_CONNECT_WEBHOOK_SECRET`.
@@ -193,7 +196,8 @@ Email + password works out of the box. Optional Google: create OAuth credentials
 
 ### 11. Before opening the doors
 - [ ] Legal review of `/legal/*` and the licence texts in `src/config/licenses.ts`. Copy lives in `src/content/legal.tsx`.
-- [ ] Decide on sales tax (Stripe Tax or a marketplace-facilitator setup), legal review and seller reserves; record each in `LAUNCH.gates` (src/config/launch.ts). Territory (US only), refund policy and the support and reconciliation owners are recorded. Live mode will not start until every gate is filled.
+- [ ] Complete legal review and enter its sign-off in `LAUNCH.gates` (src/config/launch.ts). US-only territory, Stripe Tax, no extra seller reserve, the published returns policy, and support/reconciliation owners are recorded.
+- [ ] In Stripe Tax, set the business address, verify product tax codes, register only where required, and arrange filing/remittance. Test a taxed US checkout and a partial and full refund; reconcile tax totals before accepting live orders.
 - [ ] Admin → Readiness shows no blocking checks on the production deployment; every admin has two-step sign-in.
 - [ ] Run `npm run backup:check` against production (read-only on the source) and keep the dump.
 - [ ] Sign up as a seller with a real Stripe Express account in test mode; connect a real partner account; publish; buy it with card `4242 4242 4242 4242`; check the partner order, then refund it from Admin.
@@ -223,4 +227,4 @@ The partner adapters were written against each partner's documented API but have
 - Reconciliation against Stripe is skipped for demo orders (there is nothing at Stripe to compare).
 - Self-shipped parcels don't get carrier delivery scans (no tracking API connected), so they release on buyer confirmation or 30 days after shipping.
 - Single currency (USD).
-- Sales tax is not calculated.
+- Stripe Tax is enabled for real Stripe Checkout and seller subscriptions. Demo mode simulates zero tax. Tax registrations, classification and filing/remittance still need human review; Stripe Tax itself does not supply those decisions.

@@ -52,6 +52,8 @@ async function dispatch(event: Stripe.Event): Promise<boolean> {
           orderId: s.metadata.orderId,
           paymentIntentId: id(s.payment_intent)!,
           amountCents: s.amount_total,
+          taxCents: s.total_details?.amount_tax ?? null,
+          billingCountry: s.customer_details?.address?.country ?? null,
           currency: s.currency,
         });
         return true;
@@ -114,7 +116,7 @@ async function dispatch(event: Stripe.Event): Promise<boolean> {
       const inv = event.data.object;
       const sellerId = await sellerIdFor({ customer: inv.customer, metadata: inv.parent?.subscription_details?.metadata });
       if (!sellerId || !inv.id) return false;
-      await recordPlanPayment(sellerId, inv.amount_paid, inv.id);
+      await recordPlanPayment(sellerId, inv.amount_paid, inv.id, (inv.total_taxes ?? []).reduce((a, t) => a + t.amount, 0));
       await applySubscriptionState(sellerId, { status: "ACTIVE" });
       return true;
     }

@@ -1,0 +1,8 @@
+-- Sales tax collected through Stripe Tax.
+ALTER TYPE "LedgerType" ADD VALUE 'SALES_TAX';
+
+ALTER TABLE "Order" ADD COLUMN "taxCents" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN "taxRefundedCents" INTEGER NOT NULL DEFAULT 0;
+
+ALTER TABLE "SellerOrder" ADD COLUMN "taxCents" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN "taxRefundedCents" INTEGER NOT NULL DEFAULT 0;

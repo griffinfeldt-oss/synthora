@@ -29,7 +29,7 @@ export const LAUNCH = {
 
   /**
    * Where buyers can have orders delivered and where sellers can be based.
-   * Sales tax is not calculated yet, so only add countries once a tax decision covers them.
+   * Keep US-only until tax registrations and compliance are reviewed.
    */
   territory: {
     buyerCountries: ["US"] as string[],
@@ -42,13 +42,13 @@ export const LAUNCH = {
    * APP_MODE=live refuses to start while any of them is empty.
    */
   gates: {
-    taxPolicy: null as string | null,
+    taxPolicy: "Use Stripe Tax for applicable US sales tax; registrations and filing duties need legal review. Approved by Griffin Feldt, 2026-10-05" as string | null,
     territory: "United States only: buyers and sellers. Approved by Griffin Feldt, 2026-10-05" as string | null,
     legalReview: null as string | null,
     refundPolicy:
       "Buyers get the published Returns & problems policy; anything outside it is decided case by case by the support owner. Approved by Griffin Feldt, 2026-10-05" as string | null,
     /** Whether part of each seller's earnings is held back against refunds and chargebacks. */
-    reservePolicy: null as string | null,
+    reservePolicy: "No additional seller reserve beyond the existing delivery hold. Approved by Griffin Feldt, 2026-10-05" as string | null,
     supportOwner: "Griffin Feldt; backup: Grady. Approved by Griffin Feldt, 2026-10-05" as string | null,
     reconciliationOwner: "Griffin Feldt; backup: Grady. Approved by Griffin Feldt, 2026-10-05" as string | null,
   },

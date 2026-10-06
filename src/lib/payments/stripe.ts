@@ -25,10 +25,33 @@ export class StripeGateway implements PaymentGateway {
   readonly mode = "stripe" as const;
 
   async createCheckoutSession(input: Parameters<PaymentGateway["createCheckoutSession"]>[0]) {
+    // For physical orders, use the same quoted delivery address for tax.
+    // One customer per checkout avoids changing another open session's tax location.
+    const customer = input.shipTo
+      ? await stripeClient().customers.create({
+          email: input.email,
+          name: input.shipTo.name,
+          shipping: {
+            name: input.shipTo.name,
+            address: {
+              line1: input.shipTo.line1,
+              line2: input.shipTo.line2 || undefined,
+              city: input.shipTo.city,
+              state: input.shipTo.state || undefined,
+              postal_code: input.shipTo.postalCode,
+              country: input.shipTo.country,
+            },
+          },
+          metadata: { orderId: input.orderId },
+        }, { idempotencyKey: `tax-customer-${input.orderId}` })
+      : null;
     const session = await stripeClient().checkout.sessions.create(
       {
         mode: "payment",
-        customer_email: input.email,
+        customer: customer?.id,
+        customer_email: customer ? undefined : input.email,
+        automatic_tax: { enabled: true },
+        billing_address_collection: "required",
         client_reference_id: input.orderId,
         line_items: input.lines.map((l) => ({
           quantity: l.quantity,
@@ -37,6 +60,7 @@ export class StripeGateway implements PaymentGateway {
             unit_amount: l.unitAmountCents,
             product_data: {
               name: l.name,
+              tax_code: l.taxCode,
               // Stripe rejects empty strings, so omit blank descriptions.
               description: l.description?.trim() || undefined,
               images: l.imageUrl?.startsWith("https://") ? [l.imageUrl] : undefined,
@@ -124,6 +148,8 @@ export class StripeGateway implements PaymentGateway {
         };
     const session = await stripeClient().checkout.sessions.create({
       mode: "subscription",
+      automatic_tax: { enabled: true },
+      billing_address_collection: "required",
       customer: input.customerId,
       line_items: [lineItem],
       subscription_data: { metadata: { sellerId: input.sellerId } },

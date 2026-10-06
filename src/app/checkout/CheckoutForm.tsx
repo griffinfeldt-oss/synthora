@@ -145,7 +145,7 @@ export function CheckoutForm({ defaultEmail, defaultName, countries }: { default
           ))}
           <div className="flex justify-between border-t border-line pt-3 font-semibold">
             <dt>Total</dt>
-            <dd className="font-serif text-[20px]">{priced ? formatMoney(priced.totalCents) : "…"}</dd>
+            <dd className="font-serif text-[20px]">{priced ? `${formatMoney(priced.totalCents)} + tax at payment` : "…"}</dd>
           </div>
         </dl>
         {priced?.shippingEstimated && needsAddress ? <p className="mt-2 text-[12.5px] text-muted">Enter your address for exact shipping.</p> : null}

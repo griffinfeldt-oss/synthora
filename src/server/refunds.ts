@@ -29,6 +29,13 @@ export type RefundSource = "admin" | "seller" | "stripe" | "dispute";
 
 export class RefundError extends Error {}
 
+/** Tax returned with this seller's sale refund. Full refunds return every remaining tax cent. */
+export function taxRefundFor(grossCents: number, taxCents: number, alreadyRefundedTaxCents: number, afterSaleRefundCents: number): number {
+  if (grossCents <= 0 || taxCents <= 0) return 0;
+  const target = afterSaleRefundCents >= grossCents ? taxCents : Math.round(taxCents * afterSaleRefundCents / grossCents);
+  return Math.max(0, target - alreadyRefundedTaxCents);
+}
+
 async function commissionReturnedSoFar(sellerOrderId: string): Promise<number> {
   const agg = await db.ledgerEntry.aggregate({ where: { sellerOrderId, type: "COMMISSION_REVERSAL", account: "SELLER" }, _sum: { amountCents: true } });
   return agg._sum.amountCents ?? 0;
@@ -65,6 +72,7 @@ export async function applyRefund(input: {
 
   // 1. Reserve: fails if another refund changed refundedCents since we read it.
   const before = so.refundedCents;
+  const taxRefundCents = taxRefundFor(grossCents, so.taxCents, so.taxRefundedCents, before + impact.refundCents);
   const reserved = await db.sellerOrder.updateMany({
     where: { id: so.id, refundedCents: before },
     data: { refundedCents: before + impact.refundCents },
@@ -83,7 +91,7 @@ export async function applyRefund(input: {
     const op = await runOperation({
       key: refundKey,
       kind: "refund",
-      payload: { paymentIntentId: pi, amountCents: impact.refundCents, sellerOrderId: so.id, before, reason: input.reason, source: input.source, actorId: input.actorId ?? null },
+      payload: { paymentIntentId: pi, amountCents: impact.refundCents, taxRefundCents, sellerOrderId: so.id, before, reason: input.reason, source: input.source, actorId: input.actorId ?? null },
       sellerId: so.sellerId,
       orderId: so.orderId,
       sellerOrderId: so.id,
@@ -91,7 +99,7 @@ export async function applyRefund(input: {
       execute: async (idempotencyKey) => {
         const r = await payments().refund({
           paymentIntentId: pi,
-          amountCents: impact.refundCents,
+          amountCents: impact.refundCents + taxRefundCents,
           idempotencyKey,
           metadata: { orderId: so.orderId, sellerOrderId: so.id, reason: input.reason.slice(0, 200), opKey: refundKey },
         });
@@ -130,6 +138,7 @@ export async function recordRefund(input: {
   const { impact, before, refundKey, refundRef } = input;
   const so = await db.sellerOrder.findUniqueOrThrow({ where: { id: input.sellerOrderId }, include: { order: true, payouts: true, fulfillments: true } });
   const grossCents = so.itemsCents + so.shippingCents;
+  const taxRefundCents = taxRefundFor(grossCents, so.taxCents, so.taxRefundedCents, before + impact.refundCents);
 
   // 3. Pull money back from the seller if they were already paid.
   const paidOut = so.payouts.filter((p) => p.status === "PAID" && p.stripeTransferId);
@@ -185,8 +194,9 @@ export async function recordRefund(input: {
   ];
   // A lost dispute already took the cash when it opened (see onDisputeCreated).
   if (input.source !== "dispute") {
-    rows.push({ ...base, type: "REFUND", account: "CASH", amountCents: -impact.refundCents, stripeRef: refundRef, memo: input.reason });
+    rows.push({ ...base, type: "REFUND", account: "CASH", amountCents: -(impact.refundCents + taxRefundCents), stripeRef: refundRef, memo: input.reason });
   }
+  if (taxRefundCents > 0) rows.push({ ...base, type: "SALES_TAX", account: "TAX", amountCents: -taxRefundCents, stripeRef: refundRef, memo: "Sales tax returned to buyer" });
   if (reversedCents > 0) {
     rows.push(
       { ...base, type: "TRANSFER_REVERSAL", account: "SELLER", amountCents: reversedCents, stripeRef: reversalRef, memo: "Pulled back from seller" },
@@ -200,11 +210,12 @@ export async function recordRefund(input: {
       where: { id: so.id },
       data: {
         netCents: { decrement: impact.sellerDebitCents },
+        taxRefundedCents: { increment: taxRefundCents },
         status: fullyRefunded ? "REFUNDED" : undefined,
         payoutStatus: fullyRefunded ? (so.payoutStatus === "PAID" ? "REVERSED" : so.payoutStatus === "PROCESSING" ? undefined : "CANCELED") : undefined,
       },
     });
-    await tx.order.update({ where: { id: so.orderId }, data: { refundedCents: { increment: impact.refundCents } } });
+    await tx.order.update({ where: { id: so.orderId }, data: { refundedCents: { increment: impact.refundCents }, taxRefundedCents: { increment: taxRefundCents } } });
     if (debtCents > 0) {
       await tx.sellerReceivable.create({
         data: { sellerId: so.sellerId, sellerOrderId: so.id, orderId: so.orderId, amountCents: debtCents, reason: `Refund after payout on order ${so.order.number}: ${input.reason}`.slice(0, 300) },
@@ -233,8 +244,8 @@ export async function recordRefund(input: {
   await track({ name: "refund_confirmed", orderId: so.orderId, dedupeKey: `refund_confirmed:${refundKey}`, isTest: so.order.mode !== "live", props: { amountCents: impact.refundCents, source: input.source } });
   await notifyBuyer(so.order, {
     type: "refund",
-    title: `Refund of ${formatMoney(impact.refundCents)} on order ${so.order.number}`,
-    body: `We refunded ${formatMoney(impact.refundCents)} to your original payment method. It can take 5–10 days to appear.`,
+    title: `Refund of ${formatMoney(impact.refundCents + taxRefundCents)} on order ${so.order.number}`,
+    body: `We refunded ${formatMoney(impact.refundCents + taxRefundCents)} including sales tax to your original payment method. It can take 5–10 days to appear.`,
   });
   await notifySeller(so.sellerId, {
     type: "refund",
@@ -334,17 +345,28 @@ export async function syncExternalRefund(paymentIntentId: string, totalRefundedC
   const order = await db.order.findUnique({ where: { stripePaymentIntentId: paymentIntentId }, include: { sellerOrders: true } });
   if (!order) return;
   // Refunds we started but have not recorded yet are already reserved on the seller orders.
-  const reserved = order.sellerOrders.reduce((a, so) => a + so.refundedCents, 0);
-  let missing = totalRefundedCents - Math.max(order.refundedCents, reserved);
+  const reserved = order.sellerOrders.reduce((a, so) => a + so.refundedCents + so.taxRefundedCents + taxRefundFor(so.itemsCents + so.shippingCents, so.taxCents, so.taxRefundedCents, so.refundedCents), 0);
+  let missing = totalRefundedCents - Math.max(order.refundedCents + order.taxRefundedCents, reserved);
   for (const so of order.sellerOrders) {
     if (missing <= 0) break;
     const room = so.itemsCents + so.shippingCents - so.refundedCents;
-    const amount = Math.min(room, missing);
+    // Stripe reports a tax-inclusive amount. Invert our cumulative tax rounding
+    // so the amount assigned to a seller matches exactly what left Stripe.
+    let low = 0, high = Math.min(room, missing);
+    while (low < high) {
+      const mid = Math.ceil((low + high) / 2);
+      const inclusive = mid + taxRefundFor(so.itemsCents + so.shippingCents, so.taxCents, so.taxRefundedCents, so.refundedCents + mid);
+      if (inclusive <= missing) low = mid;
+      else high = mid - 1;
+    }
+    const amount = low;
     if (amount > 0) {
+      const tax = taxRefundFor(so.itemsCents + so.shippingCents, so.taxCents, so.taxRefundedCents, so.refundedCents + amount);
       await applyRefund({ sellerOrderId: so.id, amountCents: amount, reason: "Refunded in Stripe", source: "stripe" });
-      missing -= amount;
+      missing -= amount + tax;
     }
   }
+  if (missing > 0) throw new RefundError(`Stripe refund has ${missing}¢ that cannot be allocated to the order. Reconciliation must halt payouts.`);
 }
 
 // ─── Disputes ────────────────────────────────────────────────────────────────

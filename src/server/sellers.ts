@@ -158,13 +158,14 @@ export async function applySubscriptionState(
   }
 }
 
-export async function recordPlanPayment(sellerId: string, amountCents: number, invoiceId: string): Promise<void> {
+export async function recordPlanPayment(sellerId: string, amountCents: number, invoiceId: string, taxCents = 0): Promise<void> {
   const exists = await db.ledgerEntry.findFirst({ where: { type: "SUBSCRIPTION", stripeRef: invoiceId, account: "PLATFORM" } });
   if (exists) return;
   await db.ledgerEntry.createMany({
     data: [
-      { type: "SUBSCRIPTION", account: "PLATFORM", amountCents, sellerId, stripeRef: invoiceId, memo: "Seller plan" },
+      { type: "SUBSCRIPTION", account: "PLATFORM", amountCents: amountCents - taxCents, sellerId, stripeRef: invoiceId, memo: "Seller plan" },
       { type: "SUBSCRIPTION", account: "CASH", amountCents, sellerId, stripeRef: invoiceId, memo: "Seller plan" },
+      ...(taxCents ? [{ type: "SALES_TAX" as const, account: "TAX", amountCents: taxCents, sellerId, stripeRef: invoiceId, memo: "Seller plan tax" }] : []),
     ],
   });
 }

@@ -99,6 +99,7 @@ export async function startCheckoutAction(input: { items: unknown; shipTo: unkno
     return { url };
   } catch (e) {
     if (e instanceof CheckoutError) return { error: e.message };
+    if (process.env.APP_MODE !== "live" && e instanceof Error && /valid head office address/i.test(e.message)) return { error: "Stripe Tax needs a head office address in your Stripe sandbox settings before test payments can start." };
     console.error("checkout failed", e);
     return { error: "We could not start checkout. Please try again." };
   }

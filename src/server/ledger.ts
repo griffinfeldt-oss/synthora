@@ -7,8 +7,9 @@ import type { LedgerType, Prisma } from "@prisma/client";
  *  SELLER    – what we owe a seller; a seller order's SELLER rows sum to what is
  *              still owed on it (negative: the seller owes us, see SellerReceivable)
  *  CASH      – the platform's Stripe balance (charges in, transfers/refunds/fees out)
+ *  TAX       – sales tax collected for remittance by the platform
  */
-export type LedgerAccount = "PLATFORM" | "SELLER" | "CASH";
+export type LedgerAccount = "PLATFORM" | "SELLER" | "CASH" | "TAX";
 
 export interface LedgerRow {
   type: LedgerType;

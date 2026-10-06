@@ -63,7 +63,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
   return (
     <>
       <div className="pt-6">
-        <PageBand title={`Order ${order.number}`} sub={`Placed ${formatDate(order.createdAt)} · ${formatMoney(order.totalCents)}`} />
+        <PageBand title={`Order ${order.number}`} sub={`Placed ${formatDate(order.createdAt)} · ${formatMoney(order.totalCents + order.taxCents)}`} />
       </div>
       <Container className="mt-12 max-w-4xl space-y-8">
         {order.status === "PENDING_PAYMENT" ? (
@@ -73,7 +73,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
         ) : null}
         {order.status === "CANCELED" ? <Notice title="Canceled">This checkout was not completed. You were not charged.</Notice> : null}
         {order.refundedCents > 0 ? (
-          <Notice tone="ok" title={`Refunded ${formatMoney(order.refundedCents)}`}>
+          <Notice tone="ok" title={`Refunded ${formatMoney(order.refundedCents + order.taxRefundedCents)}`}>
             Refunds go back to your original payment method and take 5–10 days to appear.
           </Notice>
         ) : null}

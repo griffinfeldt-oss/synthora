@@ -47,7 +47,12 @@ export async function runReconciliation(opts: { since?: Date; until?: Date; halt
     for (const order of orders) {
       checked++;
       const charge = await sum({ orderId: order.id, type: "CHARGE", account: "CASH" });
-      if (charge !== order.totalCents) diffs.push({ kind: "charge_vs_total", detail: `Order ${order.number}: ledger charge ≠ order total`, orderId: order.id, expected: order.totalCents, actual: charge });
+      if (charge !== order.totalCents + order.taxCents) diffs.push({ kind: "charge_vs_total", detail: `Order ${order.number}: ledger charge ≠ order total`, orderId: order.id, expected: order.totalCents + order.taxCents, actual: charge });
+      const taxBalance = await sum({ orderId: order.id, account: "TAX" });
+      if (taxBalance !== order.taxCents - order.taxRefundedCents) diffs.push({ kind: "tax_balance", detail: `Order ${order.number}: tax ledger differs`, orderId: order.id, expected: order.taxCents - order.taxRefundedCents, actual: taxBalance });
+      const sellerTax = order.sellerOrders.reduce((a, so) => a + so.taxCents, 0);
+      const sellerTaxRefunded = order.sellerOrders.reduce((a, so) => a + so.taxRefundedCents, 0);
+      if (sellerTax !== order.taxCents || sellerTaxRefunded !== order.taxRefundedCents) diffs.push({ kind: "tax_allocation", detail: `Order ${order.number}: seller tax shares differ`, orderId: order.id });
 
       for (const so of order.sellerOrders) {
         const sellerBalance = await sum({ sellerOrderId: so.id, account: "SELLER" });
@@ -70,8 +75,8 @@ export async function runReconciliation(opts: { since?: Date; until?: Date; halt
         if (!summary) {
           diffs.push({ kind: "stripe_unreachable", detail: `Order ${order.number}: could not read the payment from Stripe`, orderId: order.id });
         } else {
-          if (summary.amountReceivedCents !== order.totalCents) diffs.push({ kind: "stripe_amount", detail: `Order ${order.number}: Stripe received a different amount`, orderId: order.id, expected: order.totalCents, actual: summary.amountReceivedCents });
-          if (summary.amountRefundedCents !== order.refundedCents) diffs.push({ kind: "stripe_refunds", detail: `Order ${order.number}: refunds differ from Stripe`, orderId: order.id, expected: order.refundedCents, actual: summary.amountRefundedCents });
+          if (summary.amountReceivedCents !== order.totalCents + order.taxCents) diffs.push({ kind: "stripe_amount", detail: `Order ${order.number}: Stripe received a different amount`, orderId: order.id, expected: order.totalCents + order.taxCents, actual: summary.amountReceivedCents });
+          if (summary.amountRefundedCents !== order.refundedCents + order.taxRefundedCents) diffs.push({ kind: "stripe_refunds", detail: `Order ${order.number}: refunds differ from Stripe`, orderId: order.id, expected: order.refundedCents + order.taxRefundedCents, actual: summary.amountRefundedCents });
           if (summary.feeCents !== null && order.processingFeeStatus === "ACTUAL" && summary.feeCents !== order.processingFeeCents) {
             diffs.push({ kind: "stripe_fee", detail: `Order ${order.number}: card fee differs from Stripe`, orderId: order.id, expected: order.processingFeeCents, actual: summary.feeCents });
           }

@@ -514,7 +514,11 @@ model Order {
   currency                String      @default("usd")
   subtotalCents           Int
   shippingCents           Int
+  // Items + shipping, before sales tax. What sellers' shares are split from.
   totalCents              Int
+  // Sales tax Stripe Tax added at payment. The buyer paid totalCents + taxCents.
+  taxCents                Int         @default(0)
+  taxRefundedCents        Int         @default(0)
   processingFeeCents      Int? // Stripe fee: actual, or an estimate until reconciled
   processingFeeStatus     FeeStatus   @default(PENDING)
   // FEES.version in force when the order was placed.
@@ -583,6 +587,9 @@ model SellerOrder {
   partnerCostCents   Int // estimate; paid by the seller to their partner
   netCents           Int // what we transfer to the seller
   refundedCents      Int @default(0)
+  // This seller's part of the order's sales tax (by share of the pre-tax total). Platform money.
+  taxCents           Int @default(0)
+  taxRefundedCents   Int @default(0)
 
   payoutStatus     PayoutStatus @default(NOT_READY)
   payoutEligibleAt DateTime?
@@ -739,6 +746,7 @@ enum LedgerType {
   FEE_ADJUSTMENT // estimated card fee replaced by Stripe's actual fee
   DEBT_OFFSET // seller debt recovered from a later payout
   WRITE_OFF // seller debt the platform absorbed
+  SALES_TAX // tax collected from buyers (CASH) and owed to states (TAX); never seller money
 }
 
 // Append-only record of every money movement. Amounts are signed from the point of

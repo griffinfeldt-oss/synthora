@@ -11,6 +11,7 @@ import { z } from "zod";
 import type { Listing, ListingImage, ListingVariant, ListingVersion, PartnerConnection, Prisma, Seller } from "@prisma/client";
 import { FEES } from "@/config/fees";
 import { LAUNCH } from "@/config/launch";
+import { TAX, taxCodeForListing } from "@/config/tax";
 import { db } from "@/lib/db";
 import { env } from "@/lib/env";
 import { randomToken, sha256 } from "@/lib/crypto";
@@ -333,12 +334,13 @@ export async function startCheckout(input: {
         imageUrl: l.listing.images[0]?.url,
         unitAmountCents: l.unitPriceCents,
         quantity: l.quantity,
+        taxCode: taxCodeForListing(l.listing.kind),
       })),
     ),
   );
   for (const s of priced.sellers) {
     if (s.shippingCents > 0) {
-      lines.push({ name: `Shipping from ${s.seller.shopName}`, imageUrl: undefined, unitAmountCents: s.shippingCents, quantity: 1 });
+      lines.push({ name: `Shipping from ${s.seller.shopName}`, imageUrl: undefined, unitAmountCents: s.shippingCents, quantity: 1, taxCode: TAX.shipping });
     }
   }
 
@@ -348,6 +350,7 @@ export async function startCheckout(input: {
       orderId: order.id,
       orderNumber: order.number,
       email: input.email,
+      shipTo: input.shipTo,
       lines,
       successUrl: `${env.appUrl}/checkout/success?order=${order.id}&t=${order.accessToken}`,
       cancelUrl: `${env.appUrl}/cart?canceled=1`,
