@@ -334,7 +334,7 @@ export async function startCheckout(input: {
         imageUrl: l.listing.images[0]?.url,
         unitAmountCents: l.unitPriceCents,
         quantity: l.quantity,
-        taxCode: taxCodeForListing(l.listing.kind),
+        taxCode: taxCodeForListing(l.listing),
       })),
     ),
   );
