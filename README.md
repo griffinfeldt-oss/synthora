@@ -193,7 +193,7 @@ Email + password works out of the box. Optional Google: create OAuth credentials
 
 ### 11. Before opening the doors
 - [ ] Legal review of `/legal/*` and the licence texts in `src/config/licenses.ts`. Copy lives in `src/content/legal.tsx`.
-- [ ] Decide on sales tax (Stripe Tax or a marketplace-facilitator setup), territory, refunds and reserves, and support and reconciliation owners; record each in `LAUNCH.gates` (src/config/launch.ts). Live mode will not start until all six are filled.
+- [ ] Decide on sales tax (Stripe Tax or a marketplace-facilitator setup), legal review and seller reserves; record each in `LAUNCH.gates` (src/config/launch.ts). Territory (US only), refund policy and the support and reconciliation owners are recorded. Live mode will not start until every gate is filled.
 - [ ] Admin → Readiness shows no blocking checks on the production deployment; every admin has two-step sign-in.
 - [ ] Run `npm run backup:check` against production (read-only on the source) and keep the dump.
 - [ ] Sign up as a seller with a real Stripe Express account in test mode; connect a real partner account; publish; buy it with card `4242 4242 4242 4242`; check the partner order, then refund it from Admin.

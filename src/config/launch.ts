@@ -43,11 +43,14 @@ export const LAUNCH = {
    */
   gates: {
     taxPolicy: null as string | null,
-    territory: null as string | null,
+    territory: "United States only: buyers and sellers. Approved by Griffin Feldt, 2026-10-05" as string | null,
     legalReview: null as string | null,
-    refundAndReservePolicy: null as string | null,
-    supportOwner: null as string | null,
-    reconciliationOwner: null as string | null,
+    refundPolicy:
+      "Buyers get the published Returns & problems policy; anything outside it is decided case by case by the support owner. Approved by Griffin Feldt, 2026-10-05" as string | null,
+    /** Whether part of each seller's earnings is held back against refunds and chargebacks. */
+    reservePolicy: null as string | null,
+    supportOwner: "Griffin Feldt; backup: Grady. Approved by Griffin Feldt, 2026-10-05" as string | null,
+    reconciliationOwner: "Griffin Feldt; backup: Grady. Approved by Griffin Feldt, 2026-10-05" as string | null,
   },
 
   /** Limits on AI generation so cost is bounded and attributable. */
