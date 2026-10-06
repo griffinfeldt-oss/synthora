@@ -51,24 +51,49 @@ export class MockGateway implements PaymentGateway {
     return `${env.appUrl}/mock/stripe/billing?${new URLSearchParams({ return: input.returnUrl }).toString()}`;
   }
 
-  async getChargeInfo(paymentIntentId: string) {
+  async getChargeInfo(paymentIntentId: string): Promise<{ paymentIntentId: string; chargeId: string | null; feeCents: number | null }> {
     return { paymentIntentId, chargeId: paymentIntentId.replace(/^pi_/, "ch_"), feeCents: null };
   }
 
-  async createTransfer() {
+  async createTransfer(_input: Parameters<PaymentGateway["createTransfer"]>[0]) {
     return { transferId: id("tr") };
   }
 
-  async reverseTransfer() {
+  async reverseTransfer(_input: Parameters<PaymentGateway["reverseTransfer"]>[0]) {
     return { reversalId: id("trr") };
   }
 
-  async refund() {
+  async refund(_input: Parameters<PaymentGateway["refund"]>[0]) {
     return { refundId: id("re") };
   }
 
   /** What the mock checkout reports as Stripe's fee. */
   static feeFor(totalCents: number): number {
     return estimateProcessingFee(totalCents);
+  }
+
+  async resumeCheckout(input: { orderId: string }) {
+    return `${env.appUrl}/mock/stripe/checkout/${input.orderId}`;
+  }
+
+  // The mock keeps no state of its own, so it has nothing to look up.
+  async findTransfer(_input: Parameters<PaymentGateway["findTransfer"]>[0]): Promise<{ transferId: string } | null> {
+    return null;
+  }
+
+  async findRefund(_input: Parameters<PaymentGateway["findRefund"]>[0]): Promise<{ refundId: string } | null> {
+    return null;
+  }
+
+  async findReversal(_input: Parameters<PaymentGateway["findReversal"]>[0]): Promise<{ reversalId: string } | null> {
+    return null;
+  }
+
+  async getPaymentSummary() {
+    return null;
+  }
+
+  async getTransferSummary() {
+    return null;
   }
 }

@@ -3,6 +3,8 @@ import type { NextConfig } from "next";
 const s3Host = process.env.S3_PUBLIC_URL ? new URL(process.env.S3_PUBLIC_URL).hostname : undefined;
 
 const nextConfig: NextConfig = {
+  // End-to-end tests build into their own folder so they never disturb `next dev`.
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   // Card data never touches our servers (Stripe Checkout), but we still lock headers down.
   async headers() {
     return [

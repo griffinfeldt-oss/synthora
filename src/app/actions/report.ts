@@ -1,6 +1,7 @@
 "use server";
 
 import { z } from "zod";
+import { clientIp, hit } from "@/lib/rate-limit";
 import { currentUser } from "@/server/session";
 import { createReport } from "@/server/trust";
 
@@ -13,6 +14,7 @@ const schema = z.object({
 
 export async function reportListingAction(_prev: unknown, formData: FormData) {
   const user = await currentUser();
+  if (!(await hit("report", user?.id ?? (await clientIp())))) return { ok: false, message: "You've sent a lot of reports. Try again later." };
   const parsed = schema.safeParse({
     listingId: formData.get("listingId"),
     reason: formData.get("reason"),

@@ -7,6 +7,8 @@ const mockImageModel: ImageModel = {
   id: "mock",
   label: `${BRAND.studioName} (demo model)`,
   priority: 100,
+  demo: true,
+  estCostCentsPerImage: 0,
   available: () => true,
   async generate({ prompt, productType, count, seed }) {
     const base = seed ?? Math.floor(Math.random() * 10_000);

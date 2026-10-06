@@ -4,8 +4,9 @@ import { db } from "@/lib/db";
 import { formatMoney } from "@/lib/money";
 import { formatDate, formatDateTime } from "@/lib/utils";
 import { requireUser } from "@/server/session";
-import { signOutAction } from "@/app/actions/auth";
-import { Button, ButtonLink, Container, EmptyState, PageBand, Pill, Table } from "@/components/ui";
+import { resendVerificationAction, signOutAction } from "@/app/actions/auth";
+import { ActionForm } from "@/components/ActionForm";
+import { Button, ButtonLink, Container, EmptyState, Notice, PageBand, Pill, Table } from "@/components/ui";
 
 export const metadata: Metadata = { title: "Your account" };
 export const dynamic = "force-dynamic";
@@ -21,8 +22,9 @@ const ORDER_LABEL: Record<string, string> = {
   DISPUTED: "Disputed",
 };
 
-export default async function AccountPage() {
+export default async function AccountPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const user = await requireUser("/account");
+  const { verified, linked } = await searchParams;
   const [orders, notifications] = await Promise.all([
     db.order.findMany({ where: { buyerId: user.id }, orderBy: { createdAt: "desc" }, include: { items: true } }),
     db.notification.findMany({ where: { userId: user.id }, orderBy: { createdAt: "desc" }, take: 8 }),
@@ -33,6 +35,16 @@ export default async function AccountPage() {
         <PageBand title={`Hi, ${user.name?.split(" ")[0] ?? "there"}`} sub={user.email} />
       </div>
       <Container className="mt-12 grid gap-12 lg:grid-cols-[1fr_320px]">
+        {!user.emailVerified ? (
+          <Notice tone="warn" title="Confirm your email" className="lg:col-span-2">
+            <p>We sent a link to {user.email}. Confirming it adds any orders you placed as a guest to this account and lets you download purchased files here.</p>
+            <ActionForm action={resendVerificationAction} submitLabel="Send a new link" pendingLabel="Sending…" variant="secondary" size="sm" className="mt-3" />
+          </Notice>
+        ) : verified ? (
+          <Notice tone="ok" title="Email confirmed" className="lg:col-span-2">
+            {Number(linked) > 0 ? `We added ${linked} earlier order${linked === "1" ? "" : "s"} placed with this email.` : "Thanks. Your account is all set."}
+          </Notice>
+        ) : null}
         <section aria-labelledby="orders-title">
           <h2 id="orders-title" className="mb-4 font-serif text-[26px]">
             Your orders

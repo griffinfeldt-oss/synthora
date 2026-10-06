@@ -6,7 +6,7 @@ import "server-only";
 import type { Seller, SubscriptionStatus } from "@prisma/client";
 import { FEES } from "@/config/fees";
 import { db } from "@/lib/db";
-import { env } from "@/lib/env";
+import { env, isLive } from "@/lib/env";
 import { encryptJson } from "@/lib/crypto";
 import { payments } from "@/lib/payments";
 import { contextFor, getProvider, webhookUrlFor } from "@/fulfillment/registry";
@@ -180,6 +180,7 @@ export async function connectPartner(input: {
 }): Promise<{ accountLabel: string }> {
   const provider = getProvider(input.providerId);
   if (provider.kind !== "pod") throw new Error("That option does not need a connection.");
+  if (input.demo && isLive()) throw new Error("Demo connections are not available on the live marketplace.");
   const ctx = { ...contextFor(null), mock: input.demo, credentials: input.demo ? null : input.credentials };
   const verified = await provider.verifyConnection(ctx);
   const connection = await db.partnerConnection.upsert({

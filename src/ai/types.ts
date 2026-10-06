@@ -18,7 +18,11 @@ export interface ImageModel {
   available(): boolean;
   /** Lower runs first when several models are available. */
   priority: number;
-  generate(input: { prompt: string; productType: string; count: number; seed?: number }): Promise<GeneratedImage[]>;
+  /** True for the keyless demo generator; never presented as a paid model. */
+  demo?: boolean;
+  /** Planning estimate per image, used to reserve budget before calling the provider. */
+  estCostCentsPerImage: number;
+  generate(input: { prompt: string; productType: string; count: number; seed?: number; signal?: AbortSignal }): Promise<GeneratedImage[]>;
 }
 
 export interface ListingCopy {
@@ -41,5 +45,6 @@ export interface Copywriter {
   label: string;
   available(): boolean;
   priority: number;
-  write(input: CopyInput): Promise<ListingCopy>;
+  demo?: boolean;
+  write(input: CopyInput, options?: { signal?: AbortSignal }): Promise<ListingCopy>;
 }

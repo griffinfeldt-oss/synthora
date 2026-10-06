@@ -4,13 +4,14 @@
 import "server-only";
 import type { FulfillmentStatus as DbFulfillmentStatus, Prisma, SellerOrderStatus } from "@prisma/client";
 import { db } from "@/lib/db";
-import { mock } from "@/lib/env";
-import { absoluteUrl } from "@/lib/storage";
+import { env, isLive, mock } from "@/lib/env";
 import { payoutReleaseDate } from "@/lib/fees";
 import { contextFor, findProvider, getProvider } from "@/fulfillment/registry";
-import type { FulfillmentStatus, PartnerUpdate, ShipTo, Tracking } from "@/fulfillment/types";
+import { PartnerApiError, type FulfillmentStatus, type PartnerUpdate, type ShipTo, type Tracking } from "@/fulfillment/types";
+import { signedOriginalUrl } from "./assets";
 import { notifyBuyer, notifySeller } from "./notify";
 import { refreshOrderStatus } from "./orders";
+import { runOperation } from "./operations";
 
 const RANK: Record<FulfillmentStatus, number> = {
   PENDING: 0,
@@ -27,55 +28,99 @@ const fulfillmentInclude = {
   sellerOrder: { include: { order: true, seller: true } },
 } satisfies Prisma.FulfillmentInclude;
 
-export async function dispatchFulfillments(orderId: string): Promise<void> {
-  const pending = await db.fulfillment.findMany({
-    where: { sellerOrder: { orderId }, status: "PENDING", partnerOrderId: null },
-    select: { id: true },
-  });
-  for (const f of pending) await submitFulfillment(f.id);
+/** Partners fetch print files themselves; S3 signed links last at most 7 days. */
+const PRINT_FILE_LINK_SECONDS = 7 * 24 * 3600;
+
+async function printFileUrl(item: { designAssetId: string | null; partnerSpec: Prisma.JsonValue }): Promise<string | null> {
+  if (item.designAssetId) {
+    const asset = await db.asset.findUnique({ where: { id: item.designAssetId } });
+    if (asset) return signedOriginalUrl(asset, PRINT_FILE_LINK_SECONDS);
+  }
+  // Orders placed before files were stored privately carried a public design URL.
+  const legacy = (item.partnerSpec as { designUrl?: string } | null)?.designUrl;
+  return legacy ? (legacy.startsWith("http") ? legacy : `${env.appUrl}${legacy}`) : null;
 }
 
-function designUrlFor(listing: { partnerData: Prisma.JsonValue; images: Array<{ kind: string; url: string }> }): string | null {
-  const data = (listing.partnerData ?? {}) as { designUrl?: string };
-  const url = data.designUrl ?? listing.images.find((i) => i.kind === "DESIGN")?.url ?? listing.images[0]?.url;
-  return url ? absoluteUrl(url) : null;
+function partnerClassify(e: unknown): "FAILED" | "UNKNOWN" {
+  if (e instanceof PartnerApiError) return e.status >= 500 || e.status === 429 ? "UNKNOWN" : "FAILED";
+  if (e instanceof TypeError || (e as { name?: string })?.name === "TimeoutError") return "UNKNOWN";
+  return "FAILED";
 }
 
-/** Create the partner order for one fulfillment. Safe to retry. */
-export async function submitFulfillment(fulfillmentId: string): Promise<{ ok: boolean; error?: string }> {
+export type SubmitOutcome = { outcome: "submitted" | "failed" | "unknown" | "skipped"; error?: string };
+
+/**
+ * Create the partner order for one fulfillment, exactly once. Uses what was frozen
+ * at checkout (product, variant, design file and its hash), not the live listing.
+ */
+export async function submitFulfillment(fulfillmentId: string): Promise<SubmitOutcome> {
   const f = await db.fulfillment.findUnique({ where: { id: fulfillmentId }, include: fulfillmentInclude });
-  if (!f) return { ok: false, error: "Not found" };
-  if (f.partnerOrderId && f.status !== "FAILED") return { ok: true };
+  if (!f) return { outcome: "skipped", error: "Not found" };
+  if (f.partnerOrderId && f.status !== "FAILED") return { outcome: "submitted" };
+  if (f.status === "CANCELED") return { outcome: "skipped" };
 
   const adapter = getProvider(f.provider);
   const connection = f.connectionId ? await db.partnerConnection.findUnique({ where: { id: f.connectionId } }) : null;
   const order = f.sellerOrder.order;
   const shipTo = (order.shippingAddress ?? null) as ShipTo | null;
 
-  try {
-    if (adapter.kind === "pod" && !connection) throw new Error(`The seller's ${adapter.name} account is not connected.`);
-    const result = await adapter.createOrder(contextFor(connection), {
-      externalId: f.id,
-      shipTo: shipTo ? { ...shipTo, email: shipTo.email ?? order.email } : null,
-      items: f.items.map((i) => ({
-        partnerProductId: i.listing.partnerProductId,
-        partnerVariantId: i.variant?.partnerVariantId ?? null,
-        quantity: i.quantity,
-        designUrl: designUrlFor(i.listing),
-        partnerData: (i.listing.partnerData ?? null) as Record<string, unknown> | null,
-        title: i.title,
-      })),
-    });
-    const now = new Date();
+  if (adapter.kind === "pod" && !connection) {
+    await markFulfillmentFailed(f.id, `The seller's ${adapter.name} account is not connected.`, { incrementAttempts: true });
+    return { outcome: "failed", error: "Partner not connected" };
+  }
+  if (connection?.mock && isLive()) {
+    await markFulfillmentFailed(f.id, `This order was routed to a demo ${adapter.name} connection, which cannot make real products.`, { incrementAttempts: true });
+    return { outcome: "failed", error: "Demo connection in live mode" };
+  }
+
+  const ctx = contextFor(connection);
+  const items = await Promise.all(
+    f.items.map(async (i) => ({
+      partnerProductId: i.partnerProductId ?? i.listing.partnerProductId,
+      partnerVariantId: i.partnerVariantId ?? i.variant?.partnerVariantId ?? null,
+      quantity: i.quantity,
+      designUrl: adapter.kind === "pod" ? await printFileUrl(i) : null,
+      partnerData: (i.partnerSpec ?? i.listing.partnerData ?? null) as Record<string, unknown> | null,
+      title: i.title,
+    })),
+  );
+  // A retry after a failure is a new attempt with its own key; a crash mid-call recovers the same one.
+  const key = `partner-order:${f.id}:${f.attempts}`;
+  const op = await runOperation({
+    key,
+    kind: "partner_order",
+    payload: { fulfillmentId: f.id, provider: f.provider, items: f.items.map((i) => ({ id: i.id, sha: i.designSha256, q: i.quantity })) },
+    sellerId: f.sellerOrder.sellerId,
+    orderId: order.id,
+    sellerOrderId: f.sellerOrderId,
+    ownerRole: "operations",
+    execute: async () => {
+      const result = await adapter.createOrder(ctx, {
+        externalId: f.id,
+        shipTo: shipTo ? { ...shipTo, email: shipTo.email ?? order.email } : null,
+        items,
+      });
+      return { ref: result.partnerOrderId, result: { status: result.status } };
+    },
+    lookup: adapter.findOrder
+      ? async () => {
+          const found = await adapter.findOrder!(ctx, f.id);
+          return found ? { ref: found.partnerOrderId, result: { status: found.status } } : null;
+        }
+      : undefined,
+    classify: partnerClassify,
+  });
+
+  if (op.status === "CONFIRMED") {
+    const status = ((op.result as { status?: FulfillmentStatus } | null)?.status ?? "SUBMITTED") as DbFulfillmentStatus;
     await db.fulfillment.update({
       where: { id: f.id },
       data: {
-        partnerOrderId: result.partnerOrderId,
-        status: result.status,
+        partnerOrderId: op.providerRef,
+        status,
         attempts: { increment: 1 },
         failureReason: null,
-        deliveredAt: result.status === "DELIVERED" ? now : undefined,
-        raw: (result.raw ?? undefined) as Prisma.InputJsonValue | undefined,
+        deliveredAt: status === "DELIVERED" ? new Date() : undefined,
       },
     });
     if (adapter.kind === "self") {
@@ -87,12 +132,14 @@ export async function submitFulfillment(fulfillmentId: string): Promise<{ ok: bo
       });
     }
     await refreshSellerOrder(f.sellerOrderId);
-    return { ok: true };
-  } catch (e) {
-    const reason = e instanceof Error ? e.message : String(e);
-    await markFulfillmentFailed(f.id, reason, { incrementAttempts: true });
-    return { ok: false, error: reason };
+    return { outcome: "submitted" };
   }
+  if (op.status === "FAILED") {
+    await markFulfillmentFailed(f.id, op.lastError ?? "The partner refused the order", { incrementAttempts: true });
+    return { outcome: "failed", error: op.lastError ?? undefined };
+  }
+  // UNKNOWN or still PROCESSING elsewhere: the job retries and recovery looks the order up.
+  return { outcome: "unknown", error: op.lastError ?? "Waiting for the partner to confirm." };
 }
 
 async function markFulfillmentFailed(fulfillmentId: string, reason: string, opts: { incrementAttempts?: boolean } = {}) {
@@ -250,6 +297,8 @@ export async function retryFulfillment(sellerId: string, fulfillmentId: string) 
   const f = await db.fulfillment.findUnique({ where: { id: fulfillmentId }, include: { sellerOrder: true } });
   if (!f || f.sellerOrder.sellerId !== sellerId) throw new Error("Order not found");
   if (f.status !== "FAILED" && f.partnerOrderId) throw new Error("This order is already with the partner.");
+  const open = await db.operation.count({ where: { key: { startsWith: `partner-order:${f.id}:` }, status: { in: ["PROCESSING", "UNKNOWN"] } } });
+  if (open) throw new Error("A previous attempt has not been confirmed yet. Synthora is checking with the partner.");
   await db.fulfillment.update({ where: { id: f.id }, data: { partnerOrderId: null, status: "PENDING" } });
   return submitFulfillment(f.id);
 }

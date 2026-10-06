@@ -171,10 +171,10 @@ export class StripeGateway implements PaymentGateway {
     return { transferId: t.id };
   }
 
-  async reverseTransfer(input: { transferId: string; amountCents: number; idempotencyKey: string }) {
+  async reverseTransfer(input: { transferId: string; amountCents: number; idempotencyKey: string; metadata?: Record<string, string> }) {
     const r = await stripeClient().transfers.createReversal(
       input.transferId,
-      { amount: input.amountCents },
+      { amount: input.amountCents, metadata: input.metadata },
       { idempotencyKey: input.idempotencyKey },
     );
     return { reversalId: r.id };
@@ -186,5 +186,49 @@ export class StripeGateway implements PaymentGateway {
       { idempotencyKey: input.idempotencyKey },
     );
     return { refundId: r.id };
+  }
+
+  async resumeCheckout(input: { sessionId: string }) {
+    const s = await stripeClient().checkout.sessions.retrieve(input.sessionId);
+    return s.status === "open" && s.url ? s.url : null;
+  }
+
+  async findTransfer(input: { transferGroup: string; opKey: string }) {
+    for await (const t of stripeClient().transfers.list({ transfer_group: input.transferGroup, limit: 100 })) {
+      if (t.metadata?.opKey === input.opKey) return { transferId: t.id };
+    }
+    return null;
+  }
+
+  async findRefund(input: { paymentIntentId: string; opKey: string }) {
+    for await (const r of stripeClient().refunds.list({ payment_intent: input.paymentIntentId, limit: 100 })) {
+      if (r.metadata?.opKey === input.opKey && r.status !== "failed" && r.status !== "canceled") return { refundId: r.id };
+    }
+    return null;
+  }
+
+  async findReversal(input: { transferId: string; opKey: string }) {
+    for await (const r of stripeClient().transfers.listReversals(input.transferId, { limit: 100 })) {
+      if (r.metadata?.opKey === input.opKey) return { reversalId: r.id };
+    }
+    return null;
+  }
+
+  async getPaymentSummary(paymentIntentId: string) {
+    const pi = await stripeClient().paymentIntents.retrieve(paymentIntentId, { expand: ["latest_charge.balance_transaction"] });
+    const charge = typeof pi.latest_charge === "object" ? pi.latest_charge : null;
+    const bt = charge && typeof charge.balance_transaction === "object" ? charge.balance_transaction : null;
+    return {
+      status: pi.status,
+      currency: pi.currency,
+      amountReceivedCents: pi.amount_received,
+      amountRefundedCents: charge?.amount_refunded ?? 0,
+      feeCents: bt ? bt.fee : null,
+    };
+  }
+
+  async getTransferSummary(transferId: string) {
+    const t = await stripeClient().transfers.retrieve(transferId);
+    return { amountCents: t.amount, reversedCents: t.amount_reversed };
   }
 }

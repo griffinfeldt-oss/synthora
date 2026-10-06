@@ -45,8 +45,15 @@ async function dispatch(event: Stripe.Event): Promise<boolean> {
     case "checkout.session.completed":
     case "checkout.session.async_payment_succeeded": {
       const s = event.data.object;
+      // Only a signed event saying "paid" releases anything. A pending bank payment
+      // completes the session as "unpaid" and waits for async_payment_succeeded.
       if (s.metadata?.kind === "order" && s.payment_status === "paid") {
-        await markOrderPaid({ orderId: s.metadata.orderId, paymentIntentId: id(s.payment_intent)! });
+        await markOrderPaid({
+          orderId: s.metadata.orderId,
+          paymentIntentId: id(s.payment_intent)!,
+          amountCents: s.amount_total,
+          currency: s.currency,
+        });
         return true;
       }
       if (s.metadata?.kind === "subscription" && s.mode === "subscription") {
@@ -61,6 +68,7 @@ async function dispatch(event: Stripe.Event): Promise<boolean> {
       return false;
     }
 
+    case "checkout.session.async_payment_failed":
     case "checkout.session.expired": {
       const s = event.data.object;
       if (s.metadata?.kind === "order") await cancelPendingOrder(s.metadata.orderId);

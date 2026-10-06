@@ -30,6 +30,14 @@ export default async function PayoutsPage() {
         <Stat label="Ready to pay out" value={formatMoney(balances.eligibleCents)} hint="Sent daily" />
         <Stat label="Paid out" value={formatMoney(balances.paidCents)} />
         <Stat label="Refunded to buyers" value={formatMoney(balances.refundedCents)} />
+        {balances.processingCents ? <Stat label="Being sent" value={formatMoney(balances.processingCents)} hint="Waiting for Stripe to confirm" /> : null}
+        {balances.owedCents ? (
+          <Stat
+            label={balances.owedCents > 0 ? "You owe (from refunds after payout)" : "Credit owed to you"}
+            value={formatMoney(Math.abs(balances.owedCents))}
+            hint={balances.owedCents > 0 ? "Taken from your next payouts" : "Added to your next payout"}
+          />
+        ) : null}
       </div>
 
       <section className="grid gap-4 md:grid-cols-2">

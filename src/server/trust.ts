@@ -7,9 +7,13 @@ import { db } from "@/lib/db";
 import { env } from "@/lib/env";
 import { sendEmail } from "@/lib/email";
 import { audit, notifySeller } from "./notify";
+import { track } from "./analytics";
 
+/** Alert operators: verified admins plus any ALERT_EMAILS (which grant no access). */
 async function emailAdmins(subject: string, text: string) {
-  for (const to of env.adminEmails) await sendEmail({ to, subject, text });
+  const admins = await db.user.findMany({ where: { role: "ADMIN", emailVerified: { not: null } }, select: { email: true } });
+  const to = new Set([...admins.map((a) => a.email.toLowerCase()), ...env.alertEmails]);
+  for (const address of to) await sendEmail({ to: address, subject, text });
 }
 
 // ─── Moderation ──────────────────────────────────────────────────────────────
@@ -38,7 +42,8 @@ export async function setSellerStatus(adminId: string, sellerId: string, status:
 export async function setListingModeration(adminId: string, listingId: string, action: "suspend" | "restore" | "remove", reason?: string) {
   const listing = await db.listing.findUnique({ where: { id: listingId } });
   if (!listing) throw new Error("Listing not found");
-  const status = action === "restore" ? "ACTIVE" : action === "suspend" ? "SUSPENDED" : "REMOVED";
+  // Restoring puts back the approved version; a listing never approved goes to review.
+  const status = action === "restore" ? (listing.approvedVersionId ? "ACTIVE" : "PENDING_REVIEW") : action === "suspend" ? "SUSPENDED" : "REMOVED";
   await db.listing.update({ where: { id: listingId }, data: { status, statusReason: reason ?? null } });
   await audit(adminId, `listing.${action}`, "Listing", listingId, { reason });
   await notifySeller(listing.sellerId, {
@@ -112,7 +117,7 @@ export async function actOnTakedown(adminId: string, takedownId: string, action:
     });
   }
   if (action === "restore" && t.listing) {
-    await db.listing.update({ where: { id: t.listing.id }, data: { status: "ACTIVE", statusReason: null } });
+    await db.listing.update({ where: { id: t.listing.id }, data: { status: t.listing.approvedVersionId ? "ACTIVE" : "PENDING_REVIEW", statusReason: null } });
   }
   await db.takedownRequest.update({
     where: { id: takedownId },
@@ -161,6 +166,7 @@ export async function createReview(userId: string, orderItemId: string, rating: 
   await db.review.create({
     data: { listingId: item.listingId, orderItemId, buyerId: userId, rating, body: body.trim().slice(0, 2000) },
   });
+  await track({ name: "review_submitted", userId, listingId: item.listingId, listingVersionId: item.listingVersionId, orderId: item.orderId, dedupeKey: `review_submitted:${orderItemId}`, props: { rating } });
   const agg = await db.review.aggregate({ where: { listingId: item.listingId, status: "VISIBLE" }, _avg: { rating: true }, _count: true });
   await db.listing.update({
     where: { id: item.listingId },

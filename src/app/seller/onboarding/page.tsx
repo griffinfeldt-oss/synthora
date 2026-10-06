@@ -7,6 +7,7 @@ import { requireUser } from "@/server/session";
 import { onboardingState } from "@/server/sellers";
 import { ActionForm } from "@/components/ActionForm";
 import { Button, ButtonLink, Checkbox, Field, Input, Notice, Textarea } from "@/components/ui";
+import { LAUNCH } from "@/config/launch";
 import { createShopAction, refreshPayoutsAction, startPayoutsAction, startPlanAction } from "../actions";
 
 export const metadata: Metadata = { title: "Seller setup" };
@@ -39,7 +40,17 @@ export default async function OnboardingPage({ searchParams }: { searchParams: P
         <p className="mt-1 text-muted">
           {formatMoney(FEES.subscription.monthlyCents)}/month plus {FEES.commission.rateBps / 100}% per sale. Card processing is passed through at cost. You can change all of this later.
         </p>
+        {!user.emailVerified ? (
+          <Notice tone="warn" title="Confirm your email first" className="mt-6">
+            We sent a link to {user.email} when you signed up. You can send a new one from <Link href="/account" className="underline">your account</Link>.
+          </Notice>
+        ) : null}
         <ActionForm action={createShopAction} submitLabel="Create my shop" className="mt-6">
+          {LAUNCH.sellerSignup === "invite" ? (
+            <Field label="Invite code" htmlFor="invite" hint="Selling is invite-only while we start small.">
+              <Input id="invite" name="invite" required maxLength={60} autoComplete="off" />
+            </Field>
+          ) : null}
           <Field label="Shop name" htmlFor="shopName">
             <Input id="shopName" name="shopName" required maxLength={60} placeholder="e.g. Night Shift Prints" />
           </Field>

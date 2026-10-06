@@ -8,12 +8,13 @@
  */
 import bcrypt from "bcryptjs";
 import { db } from "../src/lib/db";
-import { putObject } from "../src/lib/storage";
 import { renderArt } from "../src/ai/art";
+import { LICENSES } from "../src/config/licenses";
+import { storeOriginal } from "../src/server/assets";
 import { setPaymentGateway } from "../src/lib/payments";
 import { MockGateway } from "../src/lib/payments/mock";
 import { connectPartner, recordPlanPayment } from "../src/server/sellers";
-import { createListing, type ListingInput } from "../src/server/listings";
+import { approveVersion, createListing, type ListingInput } from "../src/server/listings";
 import { startCheckout } from "../src/server/checkout";
 import { markOrderPaid } from "../src/server/orders";
 import { addSelfShipTracking, confirmDelivery, simulatePartnerEvent } from "../src/server/fulfillment";
@@ -40,8 +41,9 @@ async function wipe() {
   if (tables.length) await db.$executeRawUnsafe(`TRUNCATE ${tables.map((t) => `"${t.tablename}"`).join(", ")} CASCADE`);
 }
 
+// Every seeded identity is marked isTest: hidden and unpaid if the app ever runs live.
 async function user(email: string, name: string, role: "BUYER" | "ADMIN" = "BUYER") {
-  return db.user.create({ data: { email, name, role, passwordHash: await bcrypt.hash(DEMO_PASSWORD, 10), emailVerified: new Date() } });
+  return db.user.create({ data: { email, name, role, isTest: true, passwordHash: await bcrypt.hash(DEMO_PASSWORD, 10), emailVerified: new Date() } });
 }
 
 async function seller(email: string, name: string, shop: { shopName: string; slug: string; bio: string; location: string; status?: "APPROVED" | "PENDING"; selfShip?: boolean; digital?: boolean }) {
@@ -64,6 +66,7 @@ async function seller(email: string, name: string, shop: { shopName: string; slu
       currentPeriodEnd: new Date(Date.now() + 18 * 86400000),
       offersSelfShip: shop.selfShip ?? false,
       offersDigital: shop.digital ?? false,
+      isTest: true,
     },
   });
   await recordPlanPayment(s.id, 300, `in_mock_${shop.slug}_1`);
@@ -71,11 +74,14 @@ async function seller(email: string, name: string, shop: { shopName: string; slu
   return s;
 }
 
-async function design(sellerId: string, prompt: string, type: string, seed: number) {
+/** Demo artwork stored like a seller's uploaded artwork: private original + public preview. */
+async function design(sellerId: string, prompt: string, type: string, seed: number, fileName?: string) {
   const { svg } = renderArt({ prompt, productType: type, seed });
-  const { url } = await putObject(`designs/${sellerId}/seed-${seed}-${type}.svg`, Buffer.from(svg), "image/svg+xml", "public");
-  return url!;
+  const { original } = await storeOriginal({ sellerId, kind: "UPLOAD_FILE", bytes: Buffer.from(svg), contentType: "image/svg+xml", ext: "svg", fileName });
+  return original.id;
 }
+
+let reviewerId = "";
 
 interface Spec {
   prompt: string;
@@ -94,8 +100,8 @@ interface Spec {
   shippingCents?: number;
 }
 
-async function makeListing(s: Awaited<ReturnType<typeof seller>>, spec: Spec) {
-  const designUrl = await design(s.id, spec.prompt, spec.type, spec.seed);
+async function makeListing(s: Awaited<ReturnType<typeof seller>>, spec: Spec, opts: { approve?: boolean } = {}) {
+  const designAssetId = await design(s.id, spec.prompt, spec.type, spec.seed);
   const def = productType(spec.type);
   const provider = getProvider(spec.provider);
   let partnerProductId: string | null = null;
@@ -107,21 +113,14 @@ async function makeListing(s: Awaited<ReturnType<typeof seller>>, spec: Spec) {
     partnerVariantIds = product.variants.slice(0, 4).map((v) => v.id);
   }
   const colors = spec.colors ?? [def.colors[0]];
-  const images: ListingInput["images"] = def.shape === "digital"
-    ? [
-        { url: designUrl, alt: `${spec.title} preview`, kind: "MOCKUP_RENDER", mockup: { shape: "digital", color: "#FFFFFF", designUrl } },
-        { url: designUrl, alt: `${spec.title} artwork`, kind: "DESIGN", mockup: null },
-      ]
-    : [
-        ...colors.map((c) => ({ url: designUrl, alt: `${spec.title}, ${def.label.toLowerCase()}`, kind: "MOCKUP_RENDER" as const, mockup: { shape: def.shape, color: c, designUrl } })),
-        { url: designUrl, alt: `${spec.title} artwork`, kind: "DESIGN" as const, mockup: null },
-      ];
-  let digitalAsset: ListingInput["digitalAsset"] = null;
+  const images: ListingInput["images"] = [
+    ...colors.map((c) => ({ kind: "MOCKUP_RENDER" as const, color: c, alt: `${spec.title}, ${def.label.toLowerCase()} (${def.shape === "digital" ? "preview" : "mockup"})` })),
+    { kind: "DESIGN" as const, alt: `${spec.title} artwork preview` },
+  ];
+  let deliverableAssetId: string | null = null;
   if (provider.kind === "digital") {
-    const key = `digital/${s.id}/seed-${spec.seed}/${spec.title.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.svg`;
-    const { svg } = renderArt({ prompt: spec.prompt, productType: "poster", seed: spec.seed });
-    await putObject(key, Buffer.from(svg), "image/svg+xml", "private");
-    digitalAsset = { storageKey: key, fileName: `${spec.title.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.svg`, contentType: "image/svg+xml", sizeBytes: Buffer.byteLength(svg) };
+    const fileName = `${spec.title.replace(/[^a-z0-9]+/gi, "-").toLowerCase().replace(/-+$/, "")}.svg`;
+    deliverableAssetId = await design(s.id, spec.prompt, "poster", spec.seed, fileName);
   }
   const res = await createListing(s, {
     title: spec.title,
@@ -141,13 +140,19 @@ async function makeListing(s: Awaited<ReturnType<typeof seller>>, spec: Spec) {
     howMade: spec.howMade,
     prompt: spec.prompt,
     generationId: null,
-    designUrl,
+    designAssetId,
+    deliverableAssetId,
+    licenseKey: "personal",
     tags: spec.tags,
     images,
-    digitalAsset,
     rightsConfirmed: true,
     publish: true,
   });
+  if (res.problems.length) throw new Error(`Seed listing "${spec.title}" failed its checks: ${res.problems.join(" ")}`);
+  if (opts.approve !== false) {
+    const version = await db.listingVersion.findFirstOrThrow({ where: { listingId: res.id, status: "PENDING_REVIEW" } });
+    await approveVersion(reviewerId, version.id, "Demo data: layout and disclosure only", "Seeded demo listing");
+  }
   // Spread "published" dates so "newest" sorting looks natural.
   await db.listing.update({ where: { id: res.id }, data: { publishedAt: new Date(Date.now() - spec.seed * 3600_000 * 7) } });
   return res;
@@ -160,8 +165,11 @@ async function main() {
   console.log("Wiping database…");
   await wipe();
 
+  for (const l of LICENSES) await db.licenseVersion.upsert({ where: { id: l.id }, create: l, update: {} });
   const admin = await user("admin@synthora.market", "Admin", "ADMIN");
+  reviewerId = admin.id;
   const maya = await user("buyer@example.com", "Maya Chen");
+  await db.sellerInvite.create({ data: { code: "PILOT-DEMO-2026", note: "Demo invite for invite-only mode", createdBy: admin.id } });
 
   const night = await seller("nightshift@example.com", "Rafa Ortiz", {
     shopName: "Night Shift Prints",
@@ -295,23 +303,24 @@ async function main() {
       priceCents: 700, aiTool: "DALL·E / GPT Image", howMade: "Pattern artwork generated with GPT Image; the stitch guide text was written by me.",
       tags: ["embroidery", "pattern", "bunny"],
     }),
+    // Left waiting in the admin review queue.
     mushroom: await makeListing(patch, {
       prompt: "Mushroom forest, cottagecore, botanical", type: "tshirt", provider: "printful", seed: 16,
       title: "Mushroom Forest Tee", description: "Cottagecore mushrooms and ferns on a soft Bella+Canvas tee.",
       priceCents: 3100, aiTool: "Leonardo", howMade: "Made with Leonardo's Phoenix model. Printed as generated.",
       tags: ["mushroom", "cottagecore", "tee"], colors: ["#F4F1EA", "#7A8B6F"],
-    }),
+    }, { approve: false }),
   };
   await makeListing(pending, {
     prompt: "Winter snow mountains, minimal", type: "poster", provider: "printify", seed: 17,
     title: "First Snow", description: "Quiet winter peaks in blue and white.", priceCents: 3000, aiTool: "Leonardo",
     howMade: "Generated in Leonardo from a one-line prompt; printed as generated.", tags: ["winter", "poster"],
-  });
+  }, { approve: false });
 
   const listingId = async (slug: string) => (await db.listing.findUniqueOrThrow({ where: { slug } })).id;
   const pay = async (orderId: string) => {
     const o = await db.order.findUniqueOrThrow({ where: { id: orderId } });
-    await markOrderPaid({ orderId, paymentIntentId: `pi_mock_${orderId}`, chargeId: `ch_mock_${orderId}`, feeCents: estimateProcessingFee(o.totalCents) });
+    await markOrderPaid({ orderId, paymentIntentId: `pi_mock_${orderId}`, chargeId: `ch_mock_${orderId}`, feeCents: estimateProcessingFee(o.totalCents), amountCents: o.totalCents, currency: o.currency });
   };
   const fulfillmentsOf = (orderId: string) => db.fulfillment.findMany({ where: { sellerOrder: { orderId } }, include: { sellerOrder: true } });
 
@@ -401,7 +410,7 @@ async function main() {
   });
 
   console.log("\nDone. Sign in with any of these (password: %s):", DEMO_PASSWORD);
-  console.log("  admin@synthora.market     admin");
+  console.log("  admin@synthora.market   admin (asks you to set up two-step sign-in outside demo mode)");
   console.log("  buyer@example.com       buyer with orders");
   console.log("  nightshift@example.com  seller (Printful + Printify)");
   console.log("  geometry@example.com    seller (Gelato + digital)");

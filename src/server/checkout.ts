@@ -8,10 +8,12 @@
  */
 import "server-only";
 import { z } from "zod";
-import type { Listing, ListingImage, ListingVariant, PartnerConnection, Seller } from "@prisma/client";
+import type { Listing, ListingImage, ListingVariant, ListingVersion, PartnerConnection, Prisma, Seller } from "@prisma/client";
+import { FEES } from "@/config/fees";
+import { LAUNCH } from "@/config/launch";
 import { db } from "@/lib/db";
 import { env } from "@/lib/env";
-import { randomToken } from "@/lib/crypto";
+import { randomToken, sha256 } from "@/lib/crypto";
 import { splitOrder } from "@/lib/fees";
 import { orderNumber } from "@/lib/utils";
 import { payments } from "@/lib/payments";
@@ -19,6 +21,8 @@ import type { CheckoutLine } from "@/lib/payments/types";
 import { contextFor, getProvider } from "@/fulfillment/registry";
 import type { Quote, ShipTo } from "@/fulfillment/types";
 import { publicListingWhere } from "./listings";
+import { cancelPendingOrder } from "./orders";
+import { track } from "./analytics";
 
 export const cartItemSchema = z.object({
   listingId: z.string().min(1),
@@ -48,6 +52,7 @@ type LoadedListing = Listing & {
   images: ListingImage[];
   variants: ListingVariant[];
   partnerConnection: PartnerConnection | null;
+  approvedVersion: ListingVersion | null;
 };
 
 export interface PricedLine {
@@ -94,6 +99,7 @@ export async function loadCartListings(items: CartItem[]): Promise<Map<string, L
       images: { orderBy: { position: "asc" } },
       variants: { orderBy: { position: "asc" } },
       partnerConnection: true,
+      approvedVersion: true,
     },
   });
   return new Map(listings.map((l) => [l.id, l]));
@@ -188,18 +194,51 @@ export class CheckoutError extends Error {}
  * Create the order (PENDING_PAYMENT) and a Stripe Checkout session for it.
  * Returns the URL to send the buyer to.
  */
+export function buyerCountryAllowed(country: string): boolean {
+  return LAUNCH.territory.buyerCountries.includes(country.toUpperCase());
+}
+
+/** One checkout attempt: the browser's key plus what is being bought. */
+function storedCheckoutKey(clientKey: string, input: { items: CartItem[]; shipTo: ShipTo | null; email: string }): string {
+  const items = [...input.items].sort((a, b) => `${a.listingId}${a.variantId}`.localeCompare(`${b.listingId}${b.variantId}`));
+  return `${clientKey.slice(0, 64)}:${sha256(JSON.stringify({ items, ship: input.shipTo, email: input.email.toLowerCase() })).slice(0, 32)}`;
+}
+
 export async function startCheckout(input: {
   items: CartItem[];
   shipTo: ShipTo | null;
   email: string;
   buyerId: string | null;
+  /** Random per checkout attempt, from the browser. Double submits reuse the same order. */
+  checkoutKey?: string | null;
+  analytics?: { anonId: string | null; isInternal: boolean; isBot: boolean };
 }): Promise<{ orderId: string; url: string }> {
   if (input.items.length === 0) throw new CheckoutError("Your cart is empty.");
+  if (input.shipTo && !buyerCountryAllowed(input.shipTo.country)) {
+    throw new CheckoutError(`Synthora delivers to ${LAUNCH.territory.buyerCountries.join(", ")} only for now.`);
+  }
+
+  const key = input.checkoutKey ? storedCheckoutKey(input.checkoutKey, input) : null;
+  if (key) {
+    const existing = await db.order.findUnique({ where: { checkoutKey: key } });
+    if (existing) {
+      if (existing.status === "PENDING_PAYMENT" && existing.stripeCheckoutSessionId) {
+        const url = await payments().resumeCheckout({ sessionId: existing.stripeCheckoutSessionId, orderId: existing.id }).catch(() => null);
+        if (url) return { orderId: existing.id, url };
+      }
+      if (existing.paidAt) return { orderId: existing.id, url: `${env.appUrl}/checkout/success?order=${existing.id}&t=${existing.accessToken}` };
+      throw new CheckoutError("That checkout expired. Refresh the page to start again.");
+    }
+  }
+
   const priced = await priceCart(input.items, input.shipTo);
   if (priced.unavailable.length) {
     throw new CheckoutError("Some items in your cart are no longer available. Please review your cart.");
   }
   if (priced.hasPhysical && !input.shipTo) throw new CheckoutError("A shipping address is needed for physical items.");
+  if (!LAUNCH.multiSellerCheckout && priced.sellers.length > 1) {
+    throw new CheckoutError("For now, check out one shop at a time. Remove the other shop's items and buy them separately.");
+  }
 
   const split = splitOrder(
     priced.sellers.map((s) => ({
@@ -222,6 +261,9 @@ export async function startCheckout(input: {
         shippingCents: priced.shippingCents,
         totalCents: priced.totalCents,
         accessToken: randomToken(18),
+        checkoutKey: key,
+        feePolicyVersion: FEES.version,
+        mode: env.mode,
       },
     });
     for (const s of priced.sellers) {
@@ -243,6 +285,14 @@ export async function startCheckout(input: {
           data: { sellerOrderId: sellerOrder.id, provider: f.provider, connectionId: f.connectionId },
         });
         for (const l of f.lines) {
+          // Reserve self-ship stock atomically; two buyers cannot both take the last one.
+          let reserved = 0;
+          if (l.listing.kind === "SELF_SHIP" && l.listing.inventory !== null) {
+            const res = await tx.listing.updateMany({ where: { id: l.listing.id, inventory: { gte: l.quantity } }, data: { inventory: { decrement: l.quantity } } });
+            if (res.count === 0) throw new CheckoutError(`"${l.listing.title}" just sold out.`);
+            reserved = l.quantity;
+          }
+          const version = l.listing.approvedVersion;
           await tx.orderItem.create({
             data: {
               orderId: created.id,
@@ -257,6 +307,16 @@ export async function startCheckout(input: {
               quantity: l.quantity,
               unitPriceCents: l.unitPriceCents,
               baseCostCents: l.baseCostCents,
+              // What this buyer is getting, frozen now.
+              listingVersionId: version?.id ?? null,
+              designAssetId: version?.designAssetId ?? l.listing.designAssetId,
+              designSha256: version?.designSha256 ?? null,
+              deliverableAssetId: version?.deliverableAssetId ?? l.listing.deliverableAssetId,
+              licenseVersionId: version?.licenseVersionId ?? l.listing.licenseVersionId,
+              partnerProductId: l.listing.partnerProductId,
+              partnerVariantId: l.variant?.partnerVariantId ?? null,
+              partnerSpec: (l.listing.partnerData ?? undefined) as Prisma.InputJsonValue | undefined,
+              inventoryReserved: reserved,
             },
           });
         }
@@ -282,14 +342,31 @@ export async function startCheckout(input: {
     }
   }
 
-  const session = await payments().createCheckoutSession({
-    orderId: order.id,
-    orderNumber: order.number,
-    email: input.email,
-    lines,
-    successUrl: `${env.appUrl}/checkout/success?order=${order.id}&t=${order.accessToken}`,
-    cancelUrl: `${env.appUrl}/cart?canceled=1`,
-  });
+  let session: { id: string; url: string };
+  try {
+    session = await payments().createCheckoutSession({
+      orderId: order.id,
+      orderNumber: order.number,
+      email: input.email,
+      lines,
+      successUrl: `${env.appUrl}/checkout/success?order=${order.id}&t=${order.accessToken}`,
+      cancelUrl: `${env.appUrl}/cart?canceled=1`,
+    });
+  } catch (e) {
+    // Nothing was charged: release the order and its reserved stock.
+    await cancelPendingOrder(order.id);
+    throw e;
+  }
   await db.order.update({ where: { id: order.id }, data: { stripeCheckoutSessionId: session.id } });
+  await track({
+    name: "checkout_started",
+    orderId: order.id,
+    userId: input.buyerId,
+    anonId: input.analytics?.anonId ?? null,
+    isInternal: input.analytics?.isInternal ?? false,
+    isBot: input.analytics?.isBot ?? false,
+    dedupeKey: `checkout_started:${order.id}`,
+    props: { totalCents: order.totalCents, sellers: priced.sellers.length },
+  });
   return { orderId: order.id, url: session.url };
 }

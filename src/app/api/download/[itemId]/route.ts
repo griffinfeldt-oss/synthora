@@ -1,34 +1,46 @@
-// Digital delivery: checks the buyer may download, then redirects to a
-// short-lived signed URL for the private file.
+// Digital delivery: checks the buyer holds an active entitlement, then redirects
+// to a short-lived signed link for the exact file version they bought.
 import { NextResponse } from "next/server";
+import { BRAND } from "@/config/brand";
 import { db } from "@/lib/db";
 import { safeEqual } from "@/lib/crypto";
-import { env } from "@/lib/env";
 import { privateDownloadUrl } from "@/lib/storage";
+import { requestContext, track } from "@/server/analytics";
 import { currentUser } from "@/server/session";
-import { BRAND } from "@/config/brand";
-
-const MAX_DOWNLOADS = 20;
 
 export async function GET(req: Request, { params }: { params: Promise<{ itemId: string }> }) {
   const { itemId } = await params;
   const token = new URL(req.url).searchParams.get("t");
   const item = await db.orderItem.findUnique({
     where: { id: itemId },
-    include: { order: true, sellerOrder: true, listing: { include: { digitalAsset: true } } },
+    include: { order: true, entitlement: { include: { asset: true } } },
   });
-  if (!item || item.provider !== "digital" || !item.listing.digitalAsset) return new NextResponse("Not found", { status: 404 });
+  // Not found and not allowed look the same, so ids cannot be probed.
+  if (!item?.entitlement) return new NextResponse("Not found", { status: 404 });
+  const tokenOk = Boolean(token && safeEqual(item.order.accessToken, token));
   const user = await currentUser();
-  const allowed = (user && item.order.buyerId === user.id) || (token && safeEqual(item.order.accessToken, token));
+  const allowed = tokenOk || (user && item.order.buyerId === user.id);
   if (!allowed) return new NextResponse("Not found", { status: 404 });
-  if (!item.order.paidAt || ["REFUNDED", "CANCELED"].includes(item.sellerOrder.status)) {
-    return new NextResponse("This download is not available.", { status: 403 });
+
+  const ent = item.entitlement;
+  if (!item.order.paidAt || ent.status !== "ACTIVE") {
+    return new NextResponse(ent.revokedReason === "Refunded" ? "This item was refunded, so the download is no longer available." : "This download is not available.", { status: 403 });
   }
-  if (item.downloadCount >= MAX_DOWNLOADS) {
-    return new NextResponse(`Download limit reached. Contact ${BRAND.supportEmail}.`, { status: 429 });
+  // Count atomically so parallel requests cannot exceed the limit.
+  const counted = await db.entitlement.updateMany({ where: { id: ent.id, status: "ACTIVE", downloadCount: { lt: ent.maxDownloads } }, data: { downloadCount: { increment: 1 } } });
+  if (counted.count === 0) {
+    return new NextResponse(`Download limit reached. Contact ${BRAND.supportEmail} and we'll help.`, { status: 429 });
   }
-  await db.orderItem.update({ where: { id: item.id }, data: { downloadCount: { increment: 1 } } });
-  const asset = item.listing.digitalAsset;
-  const url = await privateDownloadUrl(asset.storageKey, asset.fileName, 300);
-  return NextResponse.redirect(url.startsWith("http") ? url : `${env.appUrl}${url}`, { status: 302 });
+  const url = await privateDownloadUrl(ent.asset.storageKey, ent.asset.fileName, 300);
+  const ctx = await requestContext(user);
+  await track({
+    name: "download_succeeded",
+    orderId: item.orderId,
+    listingId: item.listingId,
+    listingVersionId: item.listingVersionId,
+    ...ctx,
+    isTest: item.order.mode !== "live",
+    props: { assetId: ent.assetId, n: ent.downloadCount + 1 },
+  });
+  return NextResponse.redirect(url, { status: 302 });
 }

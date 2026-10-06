@@ -3,8 +3,10 @@ import type { Metadata } from "next";
 import type { SellerStatus } from "@prisma/client";
 import { db } from "@/lib/db";
 import { formatDate } from "@/lib/utils";
+import { LAUNCH } from "@/config/launch";
+import { ActionForm } from "@/components/ActionForm";
 import { Button, Input, Pill, Table } from "@/components/ui";
-import { sellerStatusAction } from "../actions";
+import { createInviteAction, sellerStatusAction } from "../actions";
 
 export const metadata: Metadata = { title: "Sellers · Admin" };
 export const dynamic = "force-dynamic";
@@ -14,8 +16,9 @@ export default async function AdminSellers({ searchParams }: { searchParams: Pro
   const sellers = await db.seller.findMany({
     where: status ? { status: status as SellerStatus } : {},
     orderBy: [{ status: "asc" }, { createdAt: "desc" }],
-    include: { user: { select: { email: true } }, _count: { select: { listings: true, sellerOrders: true } }, partners: { where: { status: "ACTIVE" }, select: { provider: true, mock: true } } },
+    include: { user: { select: { email: true, emailVerified: true } }, _count: { select: { listings: true, sellerOrders: true } }, partners: { where: { status: "ACTIVE" }, select: { provider: true, mock: true } } },
   });
+  const invites = await db.sellerInvite.findMany({ orderBy: { createdAt: "desc" }, take: 10 });
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-2">
@@ -42,7 +45,8 @@ export default async function AdminSellers({ searchParams }: { searchParams: Pro
               <td>
                 <p className="font-semibold">{s.shopName}</p>
                 <p className="text-[12.5px] text-muted">
-                  {s.user.email} · joined {formatDate(s.createdAt)}
+                  {s.user.email} {s.user.emailVerified ? "(confirmed)" : "(email not confirmed)"} · joined {formatDate(s.createdAt)}
+                  {s.isTest ? " · demo shop" : ""}
                 </p>
                 {s.bio ? <p className="mt-1 max-w-sm text-[12.5px] text-muted">{s.bio}</p> : null}
               </td>
@@ -86,6 +90,26 @@ export default async function AdminSellers({ searchParams }: { searchParams: Pro
           ))}
         </tbody>
       </Table>
+
+      <section className="space-y-3 border border-line bg-surface p-5">
+        <h3 className="font-serif text-[20px]">Seller invites</h3>
+        <p className="text-[13.5px] text-muted">
+          Seller signup is <strong>{LAUNCH.sellerSignup === "invite" ? "invite-only" : "open"}</strong> (src/config/launch.ts). Codes work once; one tied to an email only works for that account.
+        </p>
+        <ActionForm action={createInviteAction} submitLabel="Create invite code" size="sm" variant="secondary" className="flex flex-wrap items-end gap-3 space-y-0">
+          <Input name="email" type="email" placeholder="Creator's email (optional)" aria-label="Creator email" className="h-9 w-64" />
+          <Input name="note" placeholder="Note (optional)" aria-label="Note" className="h-9 w-48" />
+        </ActionForm>
+        {invites.length ? (
+          <ul className="space-y-1 text-[13.5px]">
+            {invites.map((i) => (
+              <li key={i.id}>
+                <code>{i.code}</code> {i.email ? `· ${i.email}` : ""} · {i.usedAt ? `used ${formatDate(i.usedAt)}` : "unused"}
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </section>
     </div>
   );
 }

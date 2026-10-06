@@ -51,6 +51,7 @@ export function OwnListingForm({ providers, canPublish, missing }: { providers: 
   const [shipping, setShipping] = useState("4.00");
   const [inventory, setInventory] = useState("10");
   const [costOwn, setCostOwn] = useState("");
+  const [license, setLicense] = useState<"personal" | "small-business">("personal");
   const [rights, setRights] = useState(false);
 
   const providerId = kind === "DIGITAL" ? "digital" : kind === "SELF_SHIP" ? "self" : podId;
@@ -66,7 +67,7 @@ export function OwnListingForm({ providers, canPublish, missing }: { providers: 
       try {
         for (const f of Array.from(files).slice(0, what === "photo" ? 8 : 1)) {
           setUploading(f.name);
-          const res = await uploadFile(f, what === "file" ? "digital" : "image");
+          const res = await uploadFile(f, what === "file" ? "digital" : what === "artwork" ? "artwork" : "image");
           if (what === "photo") setPhotos((p) => [...p, res].slice(0, 8));
           else if (what === "artwork") setArtwork(res);
           else setFile(res);
@@ -84,9 +85,11 @@ export function OwnListingForm({ providers, canPublish, missing }: { providers: 
       setError(null);
       const def = productType(typeId);
       const images = [
-        ...(kind === "PARTNER" && artwork?.url ? [{ url: artwork.url, alt: `${title}, ${def.label.toLowerCase()}`, kind: "MOCKUP_RENDER" as const, mockup: { shape: def.shape, color: def.colors[0], designUrl: artwork.url } }] : []),
-        ...photos.filter((p) => p.url).map((p) => ({ url: p.url!, alt: title, kind: "PHOTO" as const, mockup: null })),
-        ...(kind === "PARTNER" && artwork?.url ? [{ url: artwork.url, alt: `${title} artwork`, kind: "DESIGN" as const, mockup: null }] : []),
+        ...(kind === "PARTNER" && artwork ? [{ kind: "MOCKUP_RENDER" as const, color: def.colors[0], alt: `${title}, ${def.label.toLowerCase()} (mockup)` }] : []),
+        ...photos.map((p) => ({ kind: "PHOTO" as const, assetId: p.assetId, alt: title })),
+        ...(kind === "PARTNER" && artwork ? [{ kind: "DESIGN" as const, alt: `${title} artwork preview` }] : []),
+        // A digital image file with no photos is shown by its preview.
+        ...(kind === "DIGITAL" && photos.length === 0 && file?.previewAssetId ? [{ kind: "FILE_PREVIEW" as const, alt: `${title} preview` }] : []),
       ];
       const res = await createListingAction({
         title,
@@ -106,10 +109,11 @@ export function OwnListingForm({ providers, canPublish, missing }: { providers: 
         howMade,
         prompt: null,
         generationId: null,
-        designUrl: kind === "PARTNER" ? artwork?.url ?? null : null,
+        designAssetId: kind === "PARTNER" ? artwork?.assetId ?? null : null,
+        deliverableAssetId: kind === "DIGITAL" ? file?.assetId ?? null : null,
+        licenseKey: license,
         tags: tags.split(",").map((t) => t.trim()).filter(Boolean),
         images,
-        digitalAsset: kind === "DIGITAL" && file ? { storageKey: file.key, fileName: file.fileName, contentType: file.contentType, sizeBytes: file.size } : null,
         rightsConfirmed: rights,
         publish: !asDraft,
       });
@@ -182,9 +186,14 @@ export function OwnListingForm({ providers, canPublish, missing }: { providers: 
             ) : (
               <p className="text-[14px] text-danger">This partner doesn&apos;t make that product.</p>
             )}
-            <Field label="Print-ready artwork (PNG, transparent background works best)" htmlFor="art">
-              <input id="art" type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => doUpload(e.target.files, "artwork")} className="block text-[14px]" />
+            <Field label="Artwork to print (PNG or SVG; transparent background works best)" htmlFor="art" hint="Kept private and sent to your partner only when someone orders. We check it has enough pixels for each size.">
+              <input id="art" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" onChange={(e) => doUpload(e.target.files, "artwork")} className="block text-[14px]" />
             </Field>
+            {artwork?.width ? (
+              <p className="text-[13px] text-muted">
+                {artwork.width}×{artwork.height} px
+              </p>
+            ) : null}
             {artwork?.url ? (
               <div className="size-48 overflow-hidden border border-line">
                 <ProductMockup shape={productType(typeId).shape} designUrl={artwork.url} color={productType(typeId).colors[0]} alt="Preview" className="h-full w-full" />
@@ -194,10 +203,23 @@ export function OwnListingForm({ providers, canPublish, missing }: { providers: 
         ) : null}
 
         {kind === "DIGITAL" ? (
-          <Field label="The file buyers download" htmlFor="file" hint="PDF, ZIP, PNG, JPG, SVG, audio or embroidery formats. Up to 500 MB. Kept private; buyers get a short-lived link.">
-            <input id="file" type="file" onChange={(e) => doUpload(e.target.files, "file")} className="block text-[14px]" />
-            {file ? <p className="mt-1 text-[13px] font-semibold text-ok">Uploaded {file.fileName}</p> : null}
-          </Field>
+          <>
+            <Field label="The file buyers download" htmlFor="file" hint="PDF, ZIP, PNG, JPG, SVG, audio or embroidery formats. Up to 200 MB. Kept private; buyers get a short-lived link.">
+              <input id="file" type="file" onChange={(e) => doUpload(e.target.files, "file")} className="block text-[14px]" />
+              {file ? (
+                <p className="mt-1 text-[13px] font-semibold text-ok">
+                  Checked and stored: {file.fileName}
+                  {file.width ? ` · ${file.width}×${file.height} px` : ""}
+                </p>
+              ) : null}
+            </Field>
+            <Field label="What buyers may do with the file" htmlFor="license">
+              <Select id="license" value={license} onChange={(e) => setLicense(e.target.value as "personal" | "small-business")}>
+                <option value="personal">Personal use</option>
+                <option value="small-business">Personal and small business use</option>
+              </Select>
+            </Field>
+          </>
         ) : null}
 
         <Field label={kind === "PARTNER" ? "Extra photos (optional)" : "Photos"} htmlFor="photos" hint="Up to 8. The first is the main image.">
@@ -206,7 +228,7 @@ export function OwnListingForm({ providers, canPublish, missing }: { providers: 
         {photos.length ? (
           <ul className="flex flex-wrap gap-2">
             {photos.map((p, i) => (
-              <li key={p.key} className="relative size-20 overflow-hidden border border-line">
+              <li key={p.assetId} className="relative size-20 overflow-hidden border border-line">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={p.url ?? ""} alt="" className="h-full w-full object-cover" />
                 <button type="button" onClick={() => setPhotos((ps) => ps.filter((_, j) => j !== i))} className="absolute right-0 top-0 bg-ink px-1.5 text-[12px] text-paper" aria-label="Remove photo">
@@ -290,7 +312,7 @@ export function OwnListingForm({ providers, canPublish, missing }: { providers: 
         {!canPublish ? <Notice tone="warn" title="Will be saved as a draft">Finish setup to publish: {missing.join(", ")}.</Notice> : null}
         <div className="flex flex-wrap gap-3">
           <Button size="lg" onClick={() => submit(false)} disabled={pending || !rights || priceCents < FEES.listing.minPriceCents}>
-            {pending ? "Saving…" : canPublish ? "Publish listing" : "Save listing"}
+            {pending ? "Saving…" : canPublish ? "Submit for review" : "Save listing"}
           </Button>
           <Button size="lg" variant="secondary" onClick={() => submit(true)} disabled={pending || !rights}>
             Save as draft

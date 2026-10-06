@@ -62,11 +62,30 @@ export interface PaymentGateway {
     idempotencyKey: string;
     metadata: Record<string, string>;
   }): Promise<{ transferId: string }>;
-  reverseTransfer(input: { transferId: string; amountCents: number; idempotencyKey: string }): Promise<{ reversalId: string }>;
+  reverseTransfer(input: { transferId: string; amountCents: number; idempotencyKey: string; metadata?: Record<string, string> }): Promise<{ reversalId: string }>;
   refund(input: {
     paymentIntentId: string;
     amountCents: number;
     idempotencyKey: string;
     metadata: Record<string, string>;
   }): Promise<{ refundId: string }>;
+
+  // ─── Lookups used to recover uncertain operations and to reconcile ─────────
+  // Each returns null when the processor has no record (or, for the mock, no state).
+
+  /** The open checkout URL for a session, if it can still be paid. */
+  resumeCheckout(input: { sessionId: string; orderId: string }): Promise<string | null>;
+  findTransfer(input: { transferGroup: string; opKey: string }): Promise<{ transferId: string } | null>;
+  findRefund(input: { paymentIntentId: string; opKey: string }): Promise<{ refundId: string } | null>;
+  findReversal(input: { transferId: string; opKey: string }): Promise<{ reversalId: string } | null>;
+  getPaymentSummary(paymentIntentId: string): Promise<PaymentSummary | null>;
+  getTransferSummary(transferId: string): Promise<{ amountCents: number; reversedCents: number } | null>;
+}
+
+export interface PaymentSummary {
+  status: string;
+  currency: string;
+  amountReceivedCents: number;
+  amountRefundedCents: number;
+  feeCents: number | null;
 }

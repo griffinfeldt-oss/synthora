@@ -28,7 +28,7 @@ const anthropicCopywriter: Copywriter = {
   label: "Claude",
   priority: 10,
   available: () => !mock.copywriter,
-  async write({ prompt, productLabel, aiTool, partnerName, style }) {
+  async write({ prompt, productLabel, aiTool, partnerName, style }, options) {
     client ??= new Anthropic();
     const response = await client.beta.messages.parse({
       model: "claude-opus-5-5",
@@ -51,7 +51,7 @@ const anthropicCopywriter: Copywriter = {
             .join("\n"),
         },
       ],
-    });
+    }, { signal: options?.signal });
     if (response.stop_reason === "refusal" || !response.parsed_output) {
       throw new Error("The copywriter could not write this listing. Try rewording the brief.");
     }

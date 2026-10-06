@@ -15,17 +15,23 @@
     "typecheck": "npm run gen && tsc --noEmit",
     "test": "npm run gen && vitest run",
     "test:watch": "npm run gen && vitest",
-    "stripe:listen": "stripe listen --latest --events checkout.session.completed,checkout.session.async_payment_succeeded,checkout.session.expired,charge.refunded,charge.dispute.created,charge.dispute.closed,customer.subscription.created,customer.subscription.updated,customer.subscription.deleted,invoice.paid,invoice.payment_failed,account.updated --forward-to localhost:3000/api/webhooks/stripe --forward-connect-to localhost:3000/api/webhooks/stripe",
+    "e2e": "playwright test",
+    "stripe:listen": "stripe listen --latest --events checkout.session.completed,checkout.session.async_payment_succeeded,checkout.session.async_payment_failed,checkout.session.expired,charge.refunded,charge.dispute.created,charge.dispute.closed,customer.subscription.created,customer.subscription.updated,customer.subscription.deleted,invoice.paid,invoice.payment_failed,account.updated --forward-to localhost:3000/api/webhooks/stripe --forward-connect-to localhost:3000/api/webhooks/stripe",
     "setup": "node scripts/setup.mjs",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
-    "db:seed": "node --env-file-if-exists=.env --conditions=react-server --import tsx prisma/seed.ts",
+    "db:seed": "APP_MODE=demo node --env-file-if-exists=.env --conditions=react-server --import tsx prisma/seed.ts",
     "db:reset": "prisma migrate reset --force",
+    "admin:grant": "node --env-file-if-exists=.env --conditions=react-server --import tsx scripts/admin.ts grant",
+    "admin:revoke": "node --env-file-if-exists=.env --conditions=react-server --import tsx scripts/admin.ts revoke",
+    "admin:reset-2fa": "node --env-file-if-exists=.env --conditions=react-server --import tsx scripts/admin.ts reset-2fa",
+    "secrets:reencrypt": "node --env-file-if-exists=.env --conditions=react-server --import tsx scripts/reencrypt.ts",
+    "backup:check": "bash scripts/backup-restore-check.sh",
     "postinstall": "prisma generate"
   },
   "prisma": {
-    "seed": "node --env-file-if-exists=.env --conditions=react-server --import tsx prisma/seed.ts"
+    "seed": "APP_MODE=demo node --env-file-if-exists=.env --conditions=react-server --import tsx prisma/seed.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.131.0",
@@ -39,10 +45,13 @@
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "server-only": "0.0.1",
+    "sharp": "0.35.5",
     "stripe": "23.0.0",
     "zod": "4.6.5"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
+    "@playwright/test": "1.63.0",
     "@tailwindcss/postcss": "4.3.3",
     "@types/node": "22.20.5",
     "@types/react": "19.3.0",

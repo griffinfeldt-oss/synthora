@@ -45,10 +45,13 @@ export function AiWizard({ providers, sampleDesign, canPublish, missing }: { pro
 
   // Step 2
   const [prompt, setPrompt] = useState("");
-  const [designs, setDesigns] = useState<Array<{ url: string; seed: number }>>([]);
+  const [designs, setDesigns] = useState<Array<{ assetId: string; previewUrl: string; seed: number; width: number | null; height: number | null }>>([]);
   const [model, setModel] = useState("");
+  const [demoModel, setDemoModel] = useState(false);
   const [generationId, setGenerationId] = useState<string | null>(null);
-  const [design, setDesign] = useState<string | null>(null);
+  // The chosen design: its private original's id, and the public preview to show.
+  const [designId, setDesignId] = useState<string | null>(null);
+  const design = designs.find((d) => d.assetId === designId)?.previewUrl ?? null;
 
   // Step 3
   const [partnerShots, setPartnerShots] = useState<string[] | null>(null);
@@ -62,6 +65,7 @@ export function AiWizard({ providers, sampleDesign, canPublish, missing }: { pro
   const [aiTool, setAiTool] = useState("");
   const [involvement, setInvolvement] = useState<"FULL" | "ASSISTED">("FULL");
   const [writer, setWriter] = useState("");
+  const [license, setLicense] = useState<"personal" | "small-business">("personal");
 
   // Step 5
   const [price, setPrice] = useState("");
@@ -107,8 +111,9 @@ export function AiWizard({ providers, sampleDesign, canPublish, missing }: { pro
       else {
         setDesigns(res.images);
         setModel(res.model);
+        setDemoModel(res.demoModel);
         setGenerationId(res.generationId);
-        setDesign(res.images[0]?.url ?? null);
+        setDesignId(res.images[0]?.assetId ?? null);
         setPartnerShots(null);
         setTitle("");
       }
@@ -118,8 +123,8 @@ export function AiWizard({ providers, sampleDesign, canPublish, missing }: { pro
     start(async () => {
       setError(null);
       setStep(2);
-      if (provider?.kind === "pod" && provider.mockups && !provider.mock && product && design) {
-        const shots = await mockupsAction({ providerId, partnerProductId: product.id, variantIds, designUrl: design });
+      if (provider?.kind === "pod" && provider.mockups && !provider.mock && product && designId) {
+        const shots = await mockupsAction({ providerId, partnerProductId: product.id, variantIds, designAssetId: designId });
         setPartnerShots(shots);
       }
     });
@@ -152,14 +157,15 @@ export function AiWizard({ providers, sampleDesign, canPublish, missing }: { pro
   const publish = (asDraft: boolean) =>
     start(async () => {
       setError(null);
-      if (!design) return setError("Pick a design first.");
-      const mock = (c: string) => ({ url: design, alt: `${title}, ${typeDef.label.toLowerCase()}`, kind: "MOCKUP_RENDER" as const, mockup: { shape: typeDef.shape, color: c, designUrl: design } });
+      if (!designId) return setError("Pick a design first.");
+      const mock = (c: string) => ({ kind: "MOCKUP_RENDER" as const, color: c, alt: `${title}, ${typeDef.label.toLowerCase()} (mockup)` });
       const images = [
-        ...(partnerShots ?? []).map((url) => ({ url, alt: `${title}, product photo`, kind: "MOCKUP_PARTNER" as const, mockup: null })),
+        ...(partnerShots ?? []).map((url) => ({ kind: "MOCKUP_PARTNER" as const, url, alt: `${title}, product mockup` })),
         mock(color),
         ...(extraColor && extraColor !== color ? [mock(extraColor)] : []),
-        { url: design, alt: `${title} artwork`, kind: "DESIGN" as const, mockup: null },
+        { kind: "DESIGN" as const, alt: `${title} artwork preview` },
       ];
+      const digital = provider?.kind === "digital";
       const res = await createListingAction({
         title,
         description,
@@ -178,10 +184,12 @@ export function AiWizard({ providers, sampleDesign, canPublish, missing }: { pro
         howMade,
         prompt,
         generationId,
-        designUrl: design,
+        designAssetId: designId,
+        // A digital listing from the studio sells the design's private original.
+        deliverableAssetId: digital ? designId : null,
+        licenseKey: license,
         tags: tags.split(",").map((t) => t.trim()).filter(Boolean),
         images,
-        digitalAsset: null,
         rightsConfirmed: rights,
         publish: !asDraft,
       });
@@ -340,12 +348,15 @@ export function AiWizard({ providers, sampleDesign, canPublish, missing }: { pro
           </div>
           {designs.length ? (
             <div className="space-y-4">
-              <p className="text-[13.5px] text-muted">Made with {model}. Pick one:</p>
+              <p className="text-[13.5px] text-muted">
+                Made with {model}
+                {demoModel ? " (procedural demo art, not an AI model)" : ""}. Pick one. These are previews; the full-size file stays private until someone buys it.
+              </p>
               <div role="radiogroup" aria-label="Designs" className="grid grid-cols-2 gap-3 md:grid-cols-4">
                 {designs.map((d, i) => (
-                  <button key={d.url} type="button" role="radio" aria-checked={design === d.url} aria-label={`Version ${i + 1}`} onClick={() => setDesign(d.url)} className={cn("aspect-square border-2 bg-[var(--mock-2)] p-2", design === d.url ? "border-signal" : "border-transparent hover:border-line-strong")}>
+                  <button key={d.assetId} type="button" role="radio" aria-checked={designId === d.assetId} aria-label={`Version ${i + 1}`} onClick={() => setDesignId(d.assetId)} className={cn("aspect-square border-2 bg-[var(--mock-2)] p-2", designId === d.assetId ? "border-signal" : "border-transparent hover:border-line-strong")}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={d.url} alt="" className="h-full w-full object-contain" />
+                    <img src={d.previewUrl} alt="" className="h-full w-full object-contain" />
                   </button>
                 ))}
               </div>
@@ -476,6 +487,14 @@ export function AiWizard({ providers, sampleDesign, canPublish, missing }: { pro
                 </p>
               </div>
             </div>
+            {provider?.kind === "digital" ? (
+              <Field label="What buyers may do with the file" htmlFor="license">
+                <Select id="license" value={license} onChange={(e) => setLicense(e.target.value as "personal" | "small-business")}>
+                  <option value="personal">Personal use</option>
+                  <option value="small-business">Personal and small business use</option>
+                </Select>
+              </Field>
+            ) : null}
             <Checkbox
               checked={rights}
               onChange={(e) => setRights(e.target.checked)}
@@ -493,10 +512,12 @@ export function AiWizard({ providers, sampleDesign, canPublish, missing }: { pro
               <Notice tone="warn" title="This will be saved as a draft">
                 Finish setup to publish: {missing.join(", ")}.
               </Notice>
-            ) : null}
+            ) : (
+              <p className="text-[13px] text-muted">We check the files automatically, then a person reviews the listing before it goes on sale. We&apos;ll email you.</p>
+            )}
             <div className="flex flex-wrap gap-3">
               <Button size="lg" onClick={() => publish(false)} disabled={pending || !rights || priceCents < FEES.listing.minPriceCents}>
-                {pending ? "Publishing…" : canPublish ? "Publish listing" : "Save listing"}
+                {pending ? "Submitting…" : canPublish ? "Submit for review" : "Save listing"}
               </Button>
               <Button size="lg" variant="secondary" onClick={() => publish(true)} disabled={pending || !rights}>
                 Save as draft

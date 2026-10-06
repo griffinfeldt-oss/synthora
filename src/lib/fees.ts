@@ -178,19 +178,26 @@ export interface RefundImpact {
 
 /**
  * Effect of refunding `refundCents` of one seller's part of an order.
- * The refund cannot exceed what is still unrefunded.
+ * The refund cannot exceed what is still unrefunded, and across any number of
+ * partial refunds the commission returned never exceeds the commission charged
+ * (the last refund returns exactly what is left).
  */
 export function refundImpact(
-  share: { grossCents: number; commissionCents: number; refundedCents: number },
+  share: { grossCents: number; commissionCents: number; refundedCents: number; commissionReturnedCents?: number },
   refundCents: number,
   config: FeeConfig = FEES,
 ): RefundImpact {
   const refundable = share.grossCents - share.refundedCents;
   const amount = Math.max(0, Math.min(refundCents, refundable));
-  const commissionReturnedCents =
-    config.refunds.returnCommission && share.grossCents > 0
-      ? roundCents((share.commissionCents * amount) / share.grossCents)
-      : 0;
+  const alreadyReturned = share.commissionReturnedCents ?? 0;
+  const remainingCommission = Math.max(0, share.commissionCents - alreadyReturned);
+  let commissionReturnedCents = 0;
+  if (config.refunds.returnCommission && share.grossCents > 0 && amount > 0) {
+    commissionReturnedCents =
+      amount === refundable
+        ? remainingCommission
+        : Math.min(remainingCommission, roundCents((share.commissionCents * amount) / share.grossCents));
+  }
   return {
     refundCents: amount,
     commissionReturnedCents,

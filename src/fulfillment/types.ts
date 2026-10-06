@@ -200,7 +200,13 @@ export interface FulfillmentProvider {
 
   listCatalog(ctx: ProviderContext): Promise<CatalogProduct[]>;
   getQuote(ctx: ProviderContext, items: QuoteItem[], shipTo: ShipTo | null): Promise<Quote>;
+  /** Must be safe to call again with the same externalId (send it as the partner's reference). */
   createOrder(ctx: ProviderContext, order: PartnerOrderInput): Promise<PartnerOrderResult>;
+  /**
+   * Optional: find an order by our externalId. Used to recover when we cannot tell
+   * whether createOrder succeeded (timeout, crash). Without it, a person checks.
+   */
+  findOrder?(ctx: ProviderContext, externalId: string): Promise<PartnerOrderResult | null>;
   getStatus(ctx: ProviderContext, partnerOrderId: string): Promise<PartnerStatus>;
   cancel(ctx: ProviderContext, partnerOrderId: string): Promise<{ canceled: boolean; reason?: string }>;
   /** Partner-rendered product photos, when the partner has a mockup API. */

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { db } from "@/lib/db";
-import { mockSummary } from "@/lib/env";
+import { env, mockSummary } from "@/lib/env";
 import { formatMoney } from "@/lib/money";
 import { ActionForm } from "@/components/ActionForm";
 import { Pill, Stat, Table } from "@/components/ui";
@@ -32,6 +32,12 @@ export default async function AdminHome() {
     db.dispute.count({ where: { status: "OPEN" } }),
   ]);
   const thisMonth = await sum({ type: "COMMISSION", account: "PLATFORM", createdAt: { gte: monthStart } });
+  const [toReview, unknownOps, deadJobs, halted] = await Promise.all([
+    db.listingVersion.count({ where: { status: "PENDING_REVIEW" } }),
+    db.operation.count({ where: { status: { in: ["UNKNOWN", "PROCESSING"] }, updatedAt: { lt: new Date(Date.now() - 10 * 60_000) } } }),
+    db.job.count({ where: { status: "DEAD" } }),
+    db.seller.count({ where: { payoutsHaltedAt: { not: null } } }),
+  ]);
   const services = mockSummary();
 
   return (
@@ -58,6 +64,10 @@ export default async function AdminHome() {
         <h2 className="mb-3 font-serif text-[22px]">Needs attention</h2>
         <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
           {[
+            ["Listings to review", toReview, "/admin/review"],
+            ["Unconfirmed money operations", unknownOps, "/admin/actions"],
+            ["Jobs that gave up", deadJobs, "/admin/actions"],
+            ["Sellers with payouts halted", halted, "/admin/actions"],
             ["Shops to approve", pendingSellers, "/admin/sellers?status=PENDING"],
             ["Open reports", openReports, "/admin/reports"],
             ["IP notices", openTakedowns, "/admin/reports#ip"],
@@ -75,6 +85,9 @@ export default async function AdminHome() {
       </section>
       <section>
         <h2 className="mb-3 font-serif text-[22px]">Integrations</h2>
+        <p className="mb-3 text-[13.5px] text-muted">
+          App mode: <strong>{env.mode}</strong>. Partner connections can each be real or demo; see <Link href="/admin/readiness" className="underline">Readiness</Link>.
+        </p>
         <Table>
           <thead>
             <tr>
@@ -86,7 +99,7 @@ export default async function AdminHome() {
             {services.map((s) => (
               <tr key={s.service}>
                 <td>{s.service}</td>
-                <td>{s.live ? <Pill tone="ok">Live</Pill> : <Pill tone="warn">Mock</Pill>}</td>
+                <td>{s.live ? <Pill tone="ok">{env.mode === "live" ? "Live" : "Real (test mode)"}</Pill> : <Pill tone="warn">Simulated</Pill>}</td>
               </tr>
             ))}
           </tbody>

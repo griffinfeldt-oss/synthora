@@ -325,6 +325,13 @@ const printify: FulfillmentProvider = {
     return { partnerOrderId: String(created.id), status: "SUBMITTED", raw: created };
   },
 
+  // Printify's API cannot look orders up by external_id, so only demo connections can
+  // self-recover; an uncertain real order goes to the admin action queue.
+  async findOrder(ctx, externalId) {
+    if (ctx.mock) return mock.findOrder(externalId);
+    return null;
+  },
+
   async getStatus(ctx, partnerOrderId) {
     if (ctx.mock) return mock.getStatus(partnerOrderId);
     const o = await partnerFetch<{

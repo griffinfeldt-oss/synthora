@@ -3,15 +3,16 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { LAUNCH, providerEnabled } from "@/config/launch";
 import { db } from "@/lib/db";
-import { mock } from "@/lib/env";
+import { isLive, mock } from "@/lib/env";
 import { parseMoneyToCents } from "@/lib/money";
 import { slugify } from "@/lib/utils";
 import { payments } from "@/lib/payments";
 import { getProvider, isOAuthAvailable } from "@/fulfillment/registry";
 import { requireSeller, requireUser } from "@/server/session";
 import { connectPartner, disconnectPartner, startPayoutOnboarding, startPlanCheckout, syncConnectAccount } from "@/server/sellers";
-import { ListingError, setListingStatusBySeller, updateListingBasics } from "@/server/listings";
+import { ListingError, setListingStatusBySeller, submitForReview, updateListingBasics } from "@/server/listings";
 import { addSelfShipTracking, retryFulfillment, simulatePartnerEvent } from "@/server/fulfillment";
 import { applyRefund } from "@/server/refunds";
 import { fileCounterNotice } from "@/server/trust";
@@ -28,31 +29,44 @@ const profileSchema = z.object({
   location: z.string().trim().max(80).optional(),
   bio: z.string().trim().max(600).optional(),
   agree: z.literal("on", { message: "Accept the seller terms to continue" }),
+  invite: z.string().trim().max(60).optional(),
 });
 
 export async function createShopAction(_prev: Result, formData: FormData): Promise<Result> {
   const user = await requireUser("/seller/onboarding");
   if (user.seller) redirect("/seller/onboarding");
+  if (!user.emailVerified) return { ok: false, message: "Confirm your email first: use the link we sent, or send a new one from your account page." };
   const parsed = profileSchema.safeParse({
     shopName: formData.get("shopName"),
     location: formData.get("location") || undefined,
     bio: formData.get("bio") || undefined,
     agree: formData.get("agree"),
+    invite: formData.get("invite") || undefined,
   });
   if (!parsed.success) return { ok: false, message: parsed.error.issues[0]?.message ?? "Check the form." };
+  // Invite-only launch: the code must exist, be unused, and match the email if it names one.
+  let inviteId: string | null = null;
+  if (LAUNCH.sellerSignup === "invite") {
+    const invite = parsed.data.invite ? await db.sellerInvite.findUnique({ where: { code: parsed.data.invite } }) : null;
+    if (!invite || invite.usedAt || (invite.email && invite.email.toLowerCase() !== user.email)) {
+      return { ok: false, message: "Selling is invite-only for now. Enter the invite code we sent you." };
+    }
+    inviteId = invite.id;
+  }
   let slug = slugify(parsed.data.shopName) || "shop";
   if (await db.seller.findUnique({ where: { slug } })) slug = `${slug}-${Math.random().toString(36).slice(2, 6)}`;
-  await db.seller.create({
+  const seller = await db.seller.create({
     data: {
       userId: user.id,
       shopName: parsed.data.shopName,
       slug,
       location: parsed.data.location,
       bio: parsed.data.bio,
-      // Demo mode approves instantly; live shops wait for an admin.
-      status: mock.stripe ? "APPROVED" : "PENDING",
+      // Keyless demo approves instantly; test and live shops wait for an admin.
+      status: env.mode === "demo" ? "APPROVED" : "PENDING",
     },
   });
+  if (inviteId) await db.sellerInvite.updateMany({ where: { id: inviteId, usedAt: null }, data: { usedAt: new Date(), sellerId: seller.id } });
   redirect("/seller/onboarding");
 }
 
@@ -94,6 +108,7 @@ export async function setFulfillmentOptionAction(formData: FormData) {
   const { seller } = await requireSeller();
   const option = String(formData.get("option"));
   const enabled = formData.get("enabled") === "true";
+  if (enabled && !providerEnabled(option)) redirect("/seller/partners?error=" + encodeURIComponent("That option is not available on Synthora right now."));
   await db.seller.update({
     where: { id: seller.id },
     data: option === "self" ? { offersSelfShip: enabled } : option === "digital" ? { offersDigital: enabled } : {},
@@ -109,7 +124,9 @@ export async function connectPartnerAction(_prev: Result, formData: FormData): P
   const providerId = String(formData.get("provider"));
   const demo = formData.get("demo") === "true";
   const provider = getProvider(providerId);
-  if (demo && !(mock.stripe || mock.fulfillment)) return { ok: false, message: "Demo connections are only available in demo mode." };
+  if (!providerEnabled(provider.id)) return { ok: false, message: `${provider.name} is not available on Synthora right now.` };
+  // Demo connections are fine for test mode, never for real orders.
+  if (demo && isLive()) return { ok: false, message: "Demo connections are not available on the live marketplace." };
   const credentials: Record<string, string> = {};
   if (!demo) {
     for (const f of provider.auth.fields ?? []) {
@@ -164,7 +181,7 @@ export async function updateListingAction(_prev: Result, formData: FormData): Pr
   const priceCents = parseMoneyToCents(String(formData.get("price") ?? ""));
   if (priceCents === null) return { ok: false, message: "Enter a price." };
   try {
-    await updateListingBasics(seller.id, id, {
+    const res = await updateListingBasics(seller.id, id, {
       title: String(formData.get("title") ?? ""),
       description: String(formData.get("description") ?? ""),
       priceCents,
@@ -177,11 +194,28 @@ export async function updateListingAction(_prev: Result, formData: FormData): Pr
         .slice(0, 10),
       inventory: formData.get("inventory") ? Number(formData.get("inventory")) : null,
       shippingCents: formData.get("shipping") ? parseMoneyToCents(String(formData.get("shipping"))) : null,
+      deliverableAssetId: String(formData.get("deliverableAssetId") ?? "") || null,
     });
     revalidatePath(`/seller/listings/${id}`);
+    if (res.review === "problems") return { ok: false, message: `Price and stock saved. The other changes need fixing first: ${res.problems.join(" ")}` };
+    if (res.review === "pending") return { ok: true, message: "Saved. Your changes go live once a reviewer approves them; until then buyers see the approved version." };
     return { ok: true, message: "Saved." };
   } catch (e) {
     return { ok: false, message: e instanceof Error ? e.message : "Could not save." };
+  }
+}
+
+export async function submitForReviewAction(_prev: Result, formData: FormData): Promise<Result> {
+  const { seller } = await requireSeller();
+  const id = String(formData.get("listingId"));
+  try {
+    const res = await submitForReview(seller.id, id);
+    revalidatePath(`/seller/listings/${id}`);
+    if (res.missing.length) return { ok: false, message: `Finish setup first: ${res.missing.join(", ")}.` };
+    if (res.problems.length) return { ok: false, message: res.problems.join(" ") };
+    return { ok: true, message: res.status === "ACTIVE" ? "Published." : "Sent for review. We'll email you when it's approved." };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "Could not submit." };
   }
 }
 

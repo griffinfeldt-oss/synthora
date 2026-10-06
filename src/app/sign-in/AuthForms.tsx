@@ -16,6 +16,11 @@ export function SignInForm({ next }: { next: string }) {
       <Field label="Password" htmlFor="password">
         <Input id="password" name="password" type="password" autoComplete="current-password" required />
       </Field>
+      <p className="-mt-2 text-right text-[13px]">
+        <Link href="/forgot-password" className="text-muted underline hover:text-ink">
+          Forgot your password?
+        </Link>
+      </p>
       {state?.message ? (
         <p className="text-[14px] text-danger" role="alert">
           {state.message}
@@ -45,8 +50,8 @@ export function SignUpForm({ next }: { next: string }) {
       <Field label="Email" htmlFor="email">
         <Input id="email" name="email" type="email" autoComplete="email" required />
       </Field>
-      <Field label="Password" htmlFor="password" hint="At least 8 characters.">
-        <Input id="password" name="password" type="password" autoComplete="new-password" minLength={8} required />
+      <Field label="Password" htmlFor="password" hint="At least 10 characters.">
+        <Input id="password" name="password" type="password" autoComplete="new-password" minLength={10} required />
       </Field>
       {state?.message ? (
         <p className="text-[14px] text-danger" role="alert">
@@ -56,6 +61,9 @@ export function SignUpForm({ next }: { next: string }) {
       <Button type="submit" size="lg" className="w-full" disabled={pending}>
         {pending ? "Creating account…" : "Create account"}
       </Button>
+      <p className="text-[12.5px] leading-relaxed text-muted">
+        We&apos;ll email you a link to confirm your address. Orders you placed as a guest appear in your account once it&apos;s confirmed.
+      </p>
       <p className="text-[12.5px] leading-relaxed text-muted">
         By creating an account you agree to the <Link href="/legal/buyer-terms" className="underline">buyer terms</Link> and{" "}
         <Link href="/legal/privacy" className="underline">privacy policy</Link>.

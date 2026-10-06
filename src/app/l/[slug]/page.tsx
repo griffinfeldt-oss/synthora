@@ -8,6 +8,8 @@ import { formatDate } from "@/lib/utils";
 import { findProvider } from "@/fulfillment/registry";
 import { currentUser, isAdmin } from "@/server/session";
 import { publicListingWhere } from "@/server/listings";
+import { requestContext, track } from "@/server/analytics";
+import type { Manifest } from "@/server/listing-checks";
 import { ListingVisual } from "@/components/product/ListingVisual";
 import { ProductGrid } from "@/components/product/ProductCard";
 import { AddToCart, Gallery, ReportButton } from "@/components/product/ListingInteractive";
@@ -24,9 +26,21 @@ async function load(slug: string) {
       images: { orderBy: { position: "asc" } },
       variants: { orderBy: { position: "asc" } },
       seller: true,
+      licenseVersion: true,
+      designAsset: { select: { generationId: true, sha256: true } },
+      deliverableAsset: { select: { fileName: true, contentType: true, sizeBytes: true, width: true, height: true } },
+      approvedVersion: {
+        include: { decisions: { where: { outcome: "APPROVED" }, orderBy: { createdAt: "desc" }, take: 1, include: { reviewer: { select: { name: true } } } } },
+      },
       reviews: { where: { status: "VISIBLE" }, orderBy: { createdAt: "desc" }, take: 20, include: { buyer: { select: { name: true } } } },
     },
   });
+}
+
+function fileSummary(f: { contentType: string; sizeBytes: number; width: number | null; height: number | null; fileName: string }): string {
+  const ext = f.fileName.split(".").pop()?.toUpperCase() ?? "file";
+  const mb = f.sizeBytes / 1_048_576;
+  return `${ext} · ${mb >= 1 ? `${mb.toFixed(1)} MB` : `${Math.max(1, Math.round(f.sizeBytes / 1024))} KB`}${f.width && f.contentType !== "image/svg+xml" ? ` · ${f.width}×${f.height} px` : f.contentType === "image/svg+xml" ? " · vector, any size" : ""}`;
 }
 
 export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
@@ -41,8 +55,20 @@ export default async function ListingPage({ params }: { params: Params }) {
   if (!listing) notFound();
 
   const isOwner = user?.seller?.id === listing.sellerId;
-  const visible = listing.status === "ACTIVE" && listing.seller.status === "APPROVED";
+  const visible = listing.status === "ACTIVE" && Boolean(listing.approvedVersionId) && listing.seller.status === "APPROVED";
   if (!visible && !isOwner && !isAdmin(user)) notFound();
+
+  const ctx = await requestContext(user);
+  await track({ name: "product_viewed", listingId: listing.id, listingVersionId: listing.approvedVersionId, ...ctx, isInternal: ctx.isInternal || isOwner });
+
+  // Evidence, kept separate: what the creator says, what Synthora recorded, what was checked, who reviewed.
+  const version = listing.approvedVersion;
+  const manifest = (version?.manifest ?? null) as Manifest | null;
+  const generation = listing.generationId && listing.designAsset?.generationId === listing.generationId
+    ? await db.generation.findUnique({ where: { id: listing.generationId }, select: { model: true, createdAt: true, sellerId: true } })
+    : null;
+  const generationRecorded = Boolean(generation && generation.sellerId === listing.sellerId && version?.designSha256 && version.designSha256 === listing.designAsset?.sha256);
+  const review = version?.decisions[0] ?? null;
 
   const def = productType(listing.productType);
   const provider = findProvider(listing.provider);
@@ -55,7 +81,7 @@ export default async function ListingPage({ params }: { params: Params }) {
 
   const delivery =
     listing.kind === "DIGITAL"
-      ? { title: "Instant download", body: "You get a secure download link right after paying. Nothing is shipped." }
+      ? { title: "Digital file: nothing ships", body: "You download the file from your order page as soon as your payment is confirmed. No frame, print or physical item is included." }
       : listing.kind === "SELF_SHIP"
         ? { title: `Ships from ${listing.seller.location ?? "the seller"}`, body: `The seller packs and posts it within ${listing.processingDays} business days and adds tracking. ${listing.shippingCents ? `Shipping ${formatMoney(listing.shippingCents)} per order.` : "Free shipping."}` }
         : { title: `Made to order by ${provider?.name ?? "a print partner"}`, body: `Printed after you order, usually ships in ${listing.processingDays}–${listing.processingDays + 4} business days. Shipping is calculated at checkout from the partner's live rates.` };
@@ -75,7 +101,7 @@ export default async function ListingPage({ params }: { params: Params }) {
         <div className="grid gap-10 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] lg:gap-14">
           <Gallery
             main={listing.images.map((img, i) => (
-              <ListingVisual key={img.id} image={img} productTypeId={listing.productType} variant={i} detail className="absolute inset-0" />
+              <ListingVisual key={img.id} image={img} productTypeId={listing.productType} variant={i} detail labelled className="absolute inset-0" />
             ))}
             thumbs={listing.images.map((img, i) => (
               <ListingVisual key={img.id} image={img} productTypeId={listing.productType} variant={i} className="h-full w-full" />
@@ -105,6 +131,26 @@ export default async function ListingPage({ params }: { params: Params }) {
               </span>
             </div>
 
+            {listing.kind === "DIGITAL" ? (
+              <div className="mt-5 border-l-4 border-signal bg-surface px-4 py-3 text-[14px]">
+                <p className="font-semibold">Digital download. Nothing is shipped.</p>
+                {listing.deliverableAsset ? <p className="text-muted">You get: {fileSummary(listing.deliverableAsset)}</p> : null}
+                {manifest?.sharpUpToInches ? (
+                  <p className="text-muted">
+                    Prints sharply up to {manifest.sharpUpToInches.w} × {manifest.sharpUpToInches.h} in (300 DPI).
+                  </p>
+                ) : null}
+                {listing.licenseVersion ? (
+                  <p className="text-muted">
+                    Licence: {listing.licenseVersion.name}. {listing.licenseVersion.summary}{" "}
+                    <Link href={`/legal/licenses/${listing.licenseVersion.id}`} className="underline">
+                      Read it
+                    </Link>
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+
             <p className="mt-6 leading-relaxed text-muted">{listing.description}</p>
 
             <div className="mt-8">
@@ -126,7 +172,8 @@ export default async function ListingPage({ params }: { params: Params }) {
                 <span aria-hidden className="size-2 bg-signal" />
                 How it was made
               </h3>
-              <p className="mt-2 text-[14.5px] leading-relaxed">{listing.howMade}</p>
+              <p className="mt-1 text-[12px] font-semibold uppercase tracking-[0.08em] text-muted">The seller says</p>
+              <p className="mt-1 text-[14.5px] leading-relaxed">{listing.howMade}</p>
               <dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-[13.5px]">
                 <dt className="text-muted">AI tool</dt>
                 <dd className="font-semibold">{listing.aiTool}</dd>
@@ -141,6 +188,25 @@ export default async function ListingPage({ params }: { params: Params }) {
                 <dt className="text-muted">Listed</dt>
                 <dd>{formatDate(listing.publishedAt ?? listing.createdAt)}</dd>
               </dl>
+              <ul className="mt-4 space-y-2 border-t border-line pt-4 text-[13.5px]" aria-label="What Synthora checked">
+                {generationRecorded && generation ? (
+                  <li>
+                    <span className="font-semibold">Recorded by Synthora:</span> made in Synthora&apos;s studio with {generation.model} on {formatDate(generation.createdAt)}. The file sold is the one that was generated.
+                  </li>
+                ) : (
+                  <li className="text-muted">The AI use above is the seller&apos;s own statement; Synthora did not record the generation.</li>
+                )}
+                {version?.checksPassed && manifest ? (
+                  <li>
+                    <span className="font-semibold">Files checked</span> on {formatDate(new Date(manifest.checkedAt))}: the files open, match what is listed{manifest.print.length ? ", and have enough resolution for the sizes offered" : ""}.
+                  </li>
+                ) : null}
+                {review ? (
+                  <li>
+                    <span className="font-semibold">Reviewed by {review.reviewer.name?.split(" ")[0] ?? "a Synthora reviewer"}</span> on {formatDate(review.createdAt)}: {review.scope.toLowerCase()}. A review is not a guarantee that the design is original.
+                  </li>
+                ) : null}
+              </ul>
             </section>
 
             <section aria-labelledby="delivery" className="mt-4 border border-line bg-surface p-5">
@@ -152,7 +218,7 @@ export default async function ListingPage({ params }: { params: Params }) {
                 <Link href="/legal/returns" className="underline hover:text-ink">
                   Returns &amp; problems
                 </Link>{" "}
-                · Your payment is held until delivery is confirmed.
+                · The seller is paid only after {listing.kind === "DIGITAL" ? "a short hold" : "delivery"}, so problems can be put right.
               </p>
             </section>
 

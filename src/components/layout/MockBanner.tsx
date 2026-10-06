@@ -1,11 +1,11 @@
-import { mock } from "@/lib/env";
+import { env } from "@/lib/env";
 
-/** A thin strip telling everyone the app is running on mocks (hidden once Stripe is live). */
+/** Tells everyone when no real money can move: demo (simulated) or test (Stripe test mode). */
 export function MockBanner() {
-  if (!mock.stripe) return null;
-  return (
-    <div className="bg-signal px-4 py-1.5 text-center text-[12.5px] font-semibold text-signal-ink">
-      Demo mode: payments, partners and AI are simulated. No real charges.
-    </div>
-  );
+  if (env.mode === "live") return null;
+  const text =
+    env.mode === "demo"
+      ? "Demo mode: payments, partners and AI are simulated. No real charges."
+      : "Test mode: Stripe test payments only, no real money. Use card 4242 4242 4242 4242.";
+  return <div className="bg-signal px-4 py-1.5 text-center text-[12.5px] font-semibold text-signal-ink">{text}</div>;
 }

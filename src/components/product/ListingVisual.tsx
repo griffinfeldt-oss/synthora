@@ -10,8 +10,32 @@ export interface VisualImage {
   mockup?: unknown;
 }
 
+function Label({ children }: { children: React.ReactNode }) {
+  return <span className="pointer-events-none absolute left-2 top-2 z-10 bg-ink/80 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-paper">{children}</span>;
+}
+
+/** What kind of picture this is, so buyers never mistake a mockup for a photo of the product. */
+export function imageLabel(kind: string, productTypeId: string): string | null {
+  if (kind === "MOCKUP_RENDER" || kind === "MOCKUP_PARTNER") return productType(productTypeId).shape === "digital" ? "Preview" : "Mockup";
+  if (kind === "DESIGN") return "Artwork preview";
+  return null;
+}
+
 /** Renders a listing image: our SVG mockup, a partner/seller photo, or a raw design. */
-export function ListingVisual({
+export function ListingVisual(props: Parameters<typeof Visual>[0] & { labelled?: boolean }) {
+  const { labelled = props.detail ?? false, ...rest } = props;
+  const label = labelled && props.image ? imageLabel(props.image.kind, props.productTypeId) : null;
+  if (!label) return <Visual {...rest} />;
+  return (
+    // Keep the caller's positioning (usually absolute inset-0); otherwise make room for the label.
+    <div className={cn(/\b(absolute|fixed)\b/.test(props.className ?? "") ? "" : "relative", props.className)}>
+      <Label>{label}</Label>
+      <Visual {...rest} className="absolute inset-0" />
+    </div>
+  );
+}
+
+function Visual({
   image,
   productTypeId,
   className,

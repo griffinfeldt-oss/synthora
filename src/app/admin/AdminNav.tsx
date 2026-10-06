@@ -6,11 +6,16 @@ import { cn } from "@/lib/utils";
 
 const LINKS = [
   { href: "/admin", label: "Overview" },
+  { href: "/admin/actions", label: "Action queue" },
+  { href: "/admin/review", label: "Review queue" },
   { href: "/admin/sellers", label: "Sellers" },
   { href: "/admin/listings", label: "Listings" },
   { href: "/admin/reports", label: "Reports & IP" },
   { href: "/admin/orders", label: "Orders & refunds" },
   { href: "/admin/ledger", label: "Ledger" },
+  { href: "/admin/reconciliation", label: "Reconciliation" },
+  { href: "/admin/funnel", label: "Funnel" },
+  { href: "/admin/readiness", label: "Readiness" },
   { href: "/admin/outbox", label: "Email outbox" },
 ];
 

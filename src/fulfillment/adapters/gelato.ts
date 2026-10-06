@@ -238,6 +238,17 @@ const gelato: FulfillmentProvider = {
     return { partnerOrderId: res.id, status: mapStatus(res.fulfillmentStatus), raw: res };
   },
 
+  async findOrder(ctx, externalId) {
+    if (ctx.mock) return mock.findOrder(externalId);
+    const res = await partnerFetch<{ orders?: Array<{ id: string; fulfillmentStatus: string; orderReferenceId?: string }> }>("Gelato", `${ORDER_API}/orders:search`, {
+      method: "POST",
+      headers: headers(ctx),
+      json: { orderReferenceIds: [externalId], limit: 5 },
+    });
+    const o = res.orders?.find((x) => x.orderReferenceId === externalId) ?? res.orders?.[0];
+    return o ? { partnerOrderId: o.id, status: mapStatus(o.fulfillmentStatus), raw: o } : null;
+  },
+
   async getStatus(ctx, partnerOrderId) {
     if (ctx.mock) return mock.getStatus(partnerOrderId);
     const o = await partnerFetch<{

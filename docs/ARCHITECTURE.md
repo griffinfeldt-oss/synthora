@@ -86,3 +86,17 @@ A listing is public when `status = ACTIVE` and the seller is `APPROVED`. New sho
 ## Mock mode
 
 Each integration decides independently (`lib/env.ts`): no key → mock. `MOCK_MODE=true` forces everything into mock. The orange banner shows while Stripe is mocked. Because mocks call the same domain functions as real webhooks, demo mode exercises the full order, payout, refund and subscription logic.
+
+## Safety model (added October 2026)
+
+Added in response to the [October 2026 review](reviews/2026-10-05-complete-review.md); status per requirement is in [READINESS.md](READINESS.md).
+
+- **App modes** (`src/lib/env.ts`, `src/lib/readiness.ts`): `demo` / `test` / `live`. `src/instrumentation.ts` stops a live server from starting while any blocking check fails, including unsigned launch gates in `src/config/launch.ts`.
+- **Identity** (`src/server/identity.ts`): hashed single-use tokens for email verification and password reset; guest orders attach only to verified addresses; admin is a stored role on a verified account plus a TOTP second factor held in a signed cookie; password reset bumps `sessionVersion`, ending every JWT session.
+- **Files** (`src/server/assets.ts`): uploads land in a private quarantine, are checked by their bytes, and become immutable `Asset` rows owned by a seller. Originals and deliverables are private; public previews are re-encoded and ≤ 800 px. Listings reference asset ids.
+- **Listing versions** (`src/server/listings.ts`, `listing-checks.ts`): each submission is an immutable `ListingVersion` with a technical manifest; a person approves it (`ReviewDecision`). Material edits to a live listing wait as a new version while the approved one keeps selling. Order items freeze version, files, licence and partner spec.
+- **Durable effects** (`src/server/operations.ts`): every transfer, refund, reversal and partner order is an `Operation` keyed by its business identity, moving REQUESTED → PROCESSING → CONFIRMED | FAILED | UNKNOWN. Unknown outcomes are recovered by provider lookup or idempotent replay, or resolved by a person; they are never treated as success.
+- **Jobs** (`src/server/jobs.ts`): follow-up work is written in the same transaction as the state change (e.g. order paid → notify, dispatch, fee reconcile), claimed with leases, retried with backoff, and parked as DEAD in the admin action queue.
+- **Money**: payouts are PAID only after Stripe confirms; eligibility is rechecked at payout time; concurrent refunds are serialised by compare-and-set on `refundedCents`; failed reversals and post-payout fee changes become `SellerReceivable` rows recovered from later payouts; ledger rows carry `(opKey, seq)` so an operation cannot post twice.
+- **Reconciliation** (`src/server/reconcile.ts`): daily comparison of the ledger with itself and with Stripe; differences halt the affected sellers' payouts.
+- **Analytics** (`src/server/analytics.ts`): first-party events flagged test / internal / bot; definitions in [METRICS.md](METRICS.md).

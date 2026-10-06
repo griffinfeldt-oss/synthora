@@ -20,6 +20,8 @@ export default defineConfig({
     // DB-backed suites share one test database, so run files one at a time.
     fileParallelism: false,
     testTimeout: 30000,
+    // next-auth imports "next/server" without an extension; let Vite resolve it.
+    server: { deps: { inline: ["next-auth", "@auth/core"] } },
     hookTimeout: 60000,
   },
 });

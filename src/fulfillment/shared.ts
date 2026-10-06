@@ -95,12 +95,14 @@ export function isDomestic(shipTo: ShipTo | null): boolean {
 
 interface MockOrder {
   id: string;
+  externalId: string;
   status: FulfillmentStatus;
   tracking?: Tracking;
   createdAt: Date;
 }
 
 const mockOrders = new Map<string, MockOrder>();
+const mockByExternal = new Map<string, string>();
 
 /** Shared behaviour for adapters running without partner API keys. */
 export function mockBackend(providerId: string, catalog: CatalogProduct[]) {
@@ -126,9 +128,18 @@ export function mockBackend(providerId: string, catalog: CatalogProduct[]) {
         // Lets the demo show the partner-failure path: use an address containing "fail".
         throw new Error(`${providerId} rejected the order: address could not be validated`);
       }
+      // Like the real partners, one externalId makes one order.
+      const existing = mockByExternal.get(`${providerId}:${order.externalId}`);
+      if (existing) return { partnerOrderId: existing, status: mockOrders.get(existing)?.status ?? "SUBMITTED", raw: { mock: true, externalId: order.externalId } };
       const id = `mock_${providerId}_${randomBytes(5).toString("hex")}`;
-      mockOrders.set(id, { id, status: "SUBMITTED", createdAt: new Date() });
+      mockOrders.set(id, { id, externalId: order.externalId, status: "SUBMITTED", createdAt: new Date() });
+      mockByExternal.set(`${providerId}:${order.externalId}`, id);
       return { partnerOrderId: id, status: "SUBMITTED", raw: { mock: true, externalId: order.externalId } };
+    },
+
+    findOrder: async (externalId: string): Promise<PartnerOrderResult | null> => {
+      const id = mockByExternal.get(`${providerId}:${externalId}`);
+      return id ? { partnerOrderId: id, status: mockOrders.get(id)?.status ?? "SUBMITTED" } : null;
     },
 
     getStatus: async (partnerOrderId: string): Promise<PartnerStatus> => {

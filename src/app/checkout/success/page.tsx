@@ -12,9 +12,11 @@ export const dynamic = "force-dynamic";
 export default async function SuccessPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const { order: orderId, t } = await searchParams;
   if (!orderId || !t) notFound();
-  const order = await db.order.findUnique({ where: { id: orderId } });
+  const order = await db.order.findUnique({ where: { id: orderId }, include: { items: { select: { provider: true } } } });
   if (!order || !safeEqual(order.accessToken, t)) notFound();
   const paid = order.status !== "PENDING_PAYMENT" && order.status !== "CANCELED";
+  const allDigital = order.items.every((i) => i.provider === "digital");
+  const anyDigital = order.items.some((i) => i.provider === "digital");
   return (
     <>
       <ClearCart />
@@ -24,7 +26,8 @@ export default async function SuccessPage({ searchParams }: { searchParams: Prom
       <Container className="mt-12 max-w-2xl text-center">
         {paid ? (
           <p className="text-[17px]">
-            We received <strong>{formatMoney(order.totalCents)}</strong>. A receipt is on its way to {order.email}. Sellers have been notified and production starts now.
+            We received <strong>{formatMoney(order.totalCents)}</strong>. A receipt is on its way to {order.email}.{" "}
+            {allDigital ? "Your files are ready on your order page." : anyDigital ? "Your files are ready on your order page, and the sellers are preparing the rest." : "The sellers have been told and are preparing your order."}
           </p>
         ) : (
           <Notice title="Waiting for payment confirmation">Stripe is confirming your payment. This page updates on reload; you will also get an email.</Notice>

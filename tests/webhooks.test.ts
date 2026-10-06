@@ -12,7 +12,6 @@ const { db } = await import("@/lib/db");
 const { setPaymentGateway } = await import("@/lib/payments");
 const { MockGateway } = await import("@/lib/payments/mock");
 const { connectPartner } = await import("@/server/sellers");
-const { createListing } = await import("@/server/listings");
 const { startCheckout } = await import("@/server/checkout");
 const { releaseDuePayouts } = await import("@/server/payouts");
 const { confirmDelivery } = await import("@/server/fulfillment");
@@ -22,6 +21,7 @@ const { connectionWebhookUrl } = await import("@/fulfillment/webhook-url");
 const stripeRoute = await import("@/app/api/webhooks/stripe/route");
 const partnerRoute = await import("@/app/api/webhooks/fulfillment/[provider]/route");
 const { resetDb, makeSeller } = await import("./support/db");
+const { approvedListing } = await import("./support/listings");
 
 const stripe = new Stripe("sk_test_dummy");
 const SHIP = { name: "Ada Lovelace", line1: "1 Analytical Way", city: "Austin", state: "TX", postalCode: "78701", country: "US" };
@@ -38,44 +38,16 @@ function event(type: string, object: Record<string, unknown>) {
 }
 
 async function listing(sellerId: string, provider: "printify" | "printful" | "digital" | "self", priceCents: number, productTypeId = "tshirt") {
-  const seller = await db.seller.findUniqueOrThrow({ where: { id: sellerId } });
-  const p = getProvider(provider);
-  const catalog = await p.listCatalog(contextFor(null));
-  const product = catalog.find((c) => c.productType === productTypeId)!;
-  const designUrl = `/api/files/designs/${sellerId}/d.svg`;
-  const res = await createListing(seller, {
-    title: `${provider} ${productTypeId}`,
-    description: "A test listing description.",
-    priceCents,
-    productType: productTypeId,
-    kind: p.kind === "pod" ? "PARTNER" : p.kind === "self" ? "SELF_SHIP" : "DIGITAL",
-    provider,
-    partnerProductId: p.kind === "pod" ? product.id : null,
-    partnerVariantIds: p.kind === "pod" ? [product.variants[0].id] : [],
-    baseCostCents: 0,
-    shippingCents: p.kind === "self" ? 400 : null,
-    processingDays: 3,
-    inventory: p.kind === "self" ? 5 : null,
-    aiTool: "Midjourney",
-    aiInvolvement: "FULL",
-    howMade: "Generated from a prompt and printed as generated.",
-    prompt: "test",
-    generationId: null,
-    designUrl,
-    tags: [],
-    images: [{ url: designUrl, alt: "x", kind: "DESIGN", mockup: null }],
-    digitalAsset: p.kind === "digital" ? { storageKey: `digital/${sellerId}/f.svg`, fileName: "f.svg", contentType: "image/svg+xml", sizeBytes: 10 } : null,
-    rightsConfirmed: true,
-    publish: true,
-  });
-  expect(res.status).toBe("ACTIVE");
-  return res.id;
+  const id = await approvedListing(sellerId, provider, priceCents, productTypeId);
+  expect((await db.listing.findUniqueOrThrow({ where: { id } })).status).toBe("ACTIVE");
+  return id;
 }
 
 async function paidOrderViaWebhook(items: Array<{ listingId: string; quantity: number }>, shipTo: typeof SHIP | null = SHIP) {
   const { orderId } = await startCheckout({ items, shipTo, email: "buyer@test.local", buyerId: null });
+  const order = await db.order.findUniqueOrThrow({ where: { id: orderId } });
   const res = await stripeRoute.POST(
-    signedStripeRequest(event("checkout.session.completed", { id: `cs_${orderId}`, object: "checkout.session", mode: "payment", payment_status: "paid", payment_intent: `pi_${orderId}`, metadata: { kind: "order", orderId } })),
+    signedStripeRequest(event("checkout.session.completed", { id: `cs_${orderId}`, object: "checkout.session", mode: "payment", payment_status: "paid", payment_intent: `pi_${orderId}`, amount_total: order.totalCents, currency: "usd", metadata: { kind: "order", orderId } })),
   );
   expect(res.status).toBe(200);
   return orderId;

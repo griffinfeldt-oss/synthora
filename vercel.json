@@ -1,5 +1,7 @@
 {
   "crons": [
+    { "path": "/api/cron/run-jobs", "schedule": "*/5 * * * *" },
+    { "path": "/api/cron/reconcile", "schedule": "0 12 * * *" },
     { "path": "/api/cron/release-payouts", "schedule": "0 14 * * *" },
     { "path": "/api/cron/sync-fulfillments", "schedule": "0 * * * *" }
   ]

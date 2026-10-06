@@ -20,7 +20,8 @@ function keyPhrase(prompt: string): string {
 
 const mockCopywriter: Copywriter = {
   id: "mock",
-  label: "Template copywriter (demo)",
+  label: "Template writer (no AI)",
+  demo: true,
   priority: 100,
   available: () => true,
   async write({ prompt, productLabel, aiTool, partnerName }) {

@@ -25,7 +25,7 @@ export default async function AdminListings({ searchParams }: { searchParams: Pr
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-2">
         <h2 className="mr-4 font-serif text-[24px]">Listings</h2>
-        {["", "ACTIVE", "PAUSED_BILLING", "SUSPENDED", "REMOVED", "DRAFT"].map((s) => (
+        {["", "ACTIVE", "PENDING_REVIEW", "REJECTED", "PAUSED_BILLING", "SUSPENDED", "REMOVED", "DRAFT"].map((s) => (
           <Link key={s} href={s ? `/admin/listings?status=${s}` : "/admin/listings"} className={`border px-3 py-1 text-[13px] font-semibold ${status === s || (!status && !s) ? "border-ink bg-ink text-paper" : "border-line-strong"}`}>
             {s ? s.replace("_", " ").toLowerCase() : "all"}
           </Link>

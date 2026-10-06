@@ -10,7 +10,7 @@
  *   {APP_URL}/api/webhooks/fulfillment/printful?token={PRINTFUL_WEBHOOK_SECRET}
  * Printful's v1 webhooks are unsigned, so the URL token authenticates them.
  */
-import type { CatalogProduct, FulfillmentProvider, FulfillmentStatus, ProviderContext, ShipTo } from "../types";
+import { PartnerApiError, type CatalogProduct, type FulfillmentProvider, type FulfillmentStatus, type ProviderContext, type ShipTo } from "../types";
 import {
   eventId,
   mockBackend,
@@ -300,6 +300,17 @@ const printful: FulfillmentProvider = {
       },
     });
     return { partnerOrderId: String(res.result.id), status: mapStatus(res.result.status), raw: res.result };
+  },
+
+  async findOrder(ctx, externalId) {
+    if (ctx.mock) return mock.findOrder(externalId);
+    try {
+      const res = await partnerFetch<PfResult<{ id: number; status: string }>>("Printful", `${API}/orders/@${encodeURIComponent(externalId)}`, { headers: headers(ctx) });
+      return { partnerOrderId: String(res.result.id), status: mapStatus(res.result.status), raw: res.result };
+    } catch (e) {
+      if (e instanceof PartnerApiError && e.status === 404) return null;
+      throw e;
+    }
   },
 
   async getStatus(ctx, partnerOrderId) {

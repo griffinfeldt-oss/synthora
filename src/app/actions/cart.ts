@@ -1,6 +1,8 @@
 "use server";
 
 import { z } from "zod";
+import { clientIp, hit } from "@/lib/rate-limit";
+import { requestContext } from "@/server/analytics";
 import { cartItemSchema, priceCart, shipToSchema, startCheckout, CheckoutError } from "@/server/checkout";
 import { currentUser } from "@/server/session";
 
@@ -78,7 +80,8 @@ export async function priceCartAction(rawItems: unknown, rawShipTo?: unknown): P
   }
 }
 
-export async function startCheckoutAction(input: { items: unknown; shipTo: unknown; email: string }): Promise<{ url: string } | { error: string }> {
+export async function startCheckoutAction(input: { items: unknown; shipTo: unknown; email: string; checkoutKey?: string }): Promise<{ url: string } | { error: string }> {
+  if (!(await hit("checkout", await clientIp()))) return { error: "Too many checkout attempts. Wait a few minutes." };
   const items = itemsSchema.safeParse(input.items);
   if (!items.success || items.data.length === 0) return { error: "Your cart is empty." };
   const email = z.string().email().safeParse(String(input.email ?? "").trim());
@@ -90,8 +93,9 @@ export async function startCheckoutAction(input: { items: unknown; shipTo: unkno
     shipTo = { ...parsed.data, email: email.data };
   }
   const user = await currentUser();
+  const checkoutKey = typeof input.checkoutKey === "string" && /^[A-Za-z0-9-]{8,64}$/.test(input.checkoutKey) ? input.checkoutKey : null;
   try {
-    const { url } = await startCheckout({ items: items.data, shipTo, email: email.data, buyerId: user?.id ?? null });
+    const { url } = await startCheckout({ items: items.data, shipTo, email: email.data, buyerId: user?.id ?? null, checkoutKey, analytics: await requestContext(user) });
     return { url };
   } catch (e) {
     if (e instanceof CheckoutError) return { error: e.message };

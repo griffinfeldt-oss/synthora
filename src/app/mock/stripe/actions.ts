@@ -28,11 +28,14 @@ export async function mockPayAction(formData: FormData) {
   guard();
   const orderId = String(formData.get("orderId"));
   const order = await db.order.findUniqueOrThrow({ where: { id: orderId } });
+  // The simulated processor charges exactly the order total and the standard fee.
   await markOrderPaid({
     orderId,
     paymentIntentId: `pi_mock_${orderId}`,
     chargeId: `ch_mock_${orderId}`,
     feeCents: estimateProcessingFee(order.totalCents),
+    amountCents: order.totalCents,
+    currency: order.currency,
   });
   redirect(`/checkout/success?order=${order.id}&t=${order.accessToken}`);
 }

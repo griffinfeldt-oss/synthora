@@ -6,6 +6,11 @@
  * Money is integer cents. Rates are basis points (1% = 100 bps).
  */
 export const FEES = {
+  /**
+   * Bump this whenever a number below changes. Every order records the version
+   * it was placed under, so old orders keep the terms they were sold on.
+   */
+  version: "2026-10-01",
   currency: "usd",
 
   /** Seller plan, billed through Stripe Billing. */
@@ -50,6 +55,12 @@ export const FEES = {
     returnCommission: true,
     /** Stripe does not return its processing fee on refunds; it stays with the seller (at cost). */
     processingFeeReturned: false,
+    /**
+     * If money cannot be pulled back from a seller who was already paid (their
+     * Stripe balance is empty), it is recorded as a debt and taken from their next
+     * payouts. Sellers are told exactly this; see src/server/refunds.ts.
+     */
+    recoverDebtFromFuturePayouts: true,
   },
 
   listing: {

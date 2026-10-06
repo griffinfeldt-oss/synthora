@@ -12,3 +12,8 @@ next-env.d.ts
 .DS_Store
 src/fulfillment/registry.generated.ts
 src/ai/*-registry.generated.ts
+
+# end-to-end tests
+/.next-e2e/
+/test-results/
+/playwright-report/

@@ -34,7 +34,18 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
         sellerOrders: {
           include: {
             seller: true,
-            fulfillments: { include: { items: { include: { listing: { include: { images: { orderBy: { position: "asc" }, take: 1 } } }, review: true } } } },
+            fulfillments: {
+              include: {
+                items: {
+                  include: {
+                    listing: { include: { images: { orderBy: { position: "asc" }, take: 1 } } },
+                    review: true,
+                    entitlement: { include: { asset: { select: { fileName: true } } } },
+                    listingVersion: { select: { number: true } },
+                  },
+                },
+              },
+            },
           },
         },
         disputes: true,
@@ -46,6 +57,8 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
   const owner = Boolean(user && order.buyerId === user.id);
   if (!owner && !(t && safeEqual(order.accessToken, t))) notFound();
   const tokenQs = t ? `?t=${encodeURIComponent(t)}` : "";
+  const licenseIds = order.sellerOrders.flatMap((so) => so.fulfillments.flatMap((f) => f.items.map((i) => i.licenseVersionId))).filter((x): x is string => Boolean(x));
+  const licenses = new Map((await db.licenseVersion.findMany({ where: { id: { in: licenseIds } } })).map((l) => [l.id, l]));
 
   return (
     <>
@@ -53,7 +66,11 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
         <PageBand title={`Order ${order.number}`} sub={`Placed ${formatDate(order.createdAt)} · ${formatMoney(order.totalCents)}`} />
       </div>
       <Container className="mt-12 max-w-4xl space-y-8">
-        {order.status === "PENDING_PAYMENT" ? <Notice tone="warn" title="Awaiting payment">This order has not been paid yet.</Notice> : null}
+        {order.status === "PENDING_PAYMENT" ? (
+          <Notice tone="warn" title="Waiting for payment confirmation">
+            We haven&apos;t received confirmation of your payment yet. Nothing ships and no files unlock until it arrives; we&apos;ll email you. If you didn&apos;t finish paying, you haven&apos;t been charged.
+          </Notice>
+        ) : null}
         {order.status === "CANCELED" ? <Notice title="Canceled">This checkout was not completed. You were not charged.</Notice> : null}
         {order.refundedCents > 0 ? (
           <Notice tone="ok" title={`Refunded ${formatMoney(order.refundedCents)}`}>
@@ -109,10 +126,29 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
                               {item.quantity} × {formatMoney(item.unitPriceCents)}
                               {item.variantName ? ` · ${item.variantName}` : ""}
                             </p>
-                            {digital && order.paidAt && so.status !== "REFUNDED" ? (
-                              <a href={`/api/download/${item.id}${tokenQs}`} className="mt-2 inline-flex items-center gap-2 text-[14px] font-semibold text-signal underline">
-                                Download file
-                              </a>
+                            {item.entitlement?.status === "ACTIVE" && order.paidAt ? (
+                              <div className="mt-2 space-y-0.5 text-[13px] text-muted">
+                                <a href={`/api/download/${item.id}${tokenQs}`} className="inline-flex items-center gap-2 text-[14px] font-semibold text-signal underline">
+                                  Download {item.entitlement.asset.fileName}
+                                </a>
+                                <p>
+                                  {item.entitlement.downloadCount} of {item.entitlement.maxDownloads} downloads used
+                                  {item.listingVersion ? ` · the version you bought (v${item.listingVersion.number})` : ""}
+                                  {item.licenseVersionId && licenses.get(item.licenseVersionId) ? (
+                                    <>
+                                      {" "}
+                                      ·{" "}
+                                      <Link href={`/legal/licenses/${item.licenseVersionId}`} className="underline">
+                                        {licenses.get(item.licenseVersionId)!.name} licence v{licenses.get(item.licenseVersionId)!.version}
+                                      </Link>
+                                    </>
+                                  ) : null}
+                                </p>
+                              </div>
+                            ) : item.entitlement?.status === "REVOKED" ? (
+                              <p className="mt-2 text-[13px] text-muted">Refunded, so the download is no longer available.</p>
+                            ) : digital && order.paidAt ? (
+                              <p className="mt-2 text-[13px] text-muted">Your file is being prepared. Refresh in a moment.</p>
                             ) : null}
                             {owner && ["DELIVERED", "COMPLETED"].includes(so.status) && !item.review ? <ReviewForm orderId={order.id} orderItemId={item.id} /> : null}
                             {item.review ? <p className="mt-1 text-[13px] text-muted">You rated this {item.review.rating}/5. Thank you!</p> : null}
@@ -157,12 +193,12 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
         <section className="border border-line bg-surface p-5 text-[14px]">
           <h2 className="font-serif text-[20px]">Something wrong?</h2>
           <p className="mt-1 text-muted">
-            Damaged, wrong or missing items are covered by our <Link href="/legal/returns" className="underline">returns policy</Link>. Email{" "}
-            <a href={`mailto:${BRAND.supportEmail}`} className="underline">
-              {BRAND.supportEmail}
-            </a>{" "}
-            with your order number <strong>{order.number}</strong> and we will sort it out. Your payment is held until delivery.
+            Damaged, wrong, missing items or a file that won&apos;t open are covered by our <Link href="/legal/returns" className="underline">returns policy</Link>. We hold the seller&apos;s payment until delivery, so problems can be put right.
           </p>
+          <a href={`/api/support/${order.id}${tokenQs}`} className="mt-3 inline-flex font-semibold underline">
+            Get help with order {order.number}
+          </a>
+          <p className="mt-1 text-[12.5px] text-muted">Opens an email to {BRAND.supportEmail} with your order number filled in.</p>
         </section>
       </Container>
     </>

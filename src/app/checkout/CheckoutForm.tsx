@@ -6,23 +6,30 @@ import { Button, ButtonLink, EmptyState, Field, Input, Notice, Select } from "@/
 import { formatMoney } from "@/lib/money";
 import { priceCartAction, startCheckoutAction, type PricedCartView } from "@/app/actions/cart";
 
-const COUNTRIES = [
-  ["US", "United States"],
-  ["CA", "Canada"],
-  ["GB", "United Kingdom"],
-  ["AU", "Australia"],
-  ["DE", "Germany"],
-  ["FR", "France"],
-  ["NL", "Netherlands"],
-  ["IE", "Ireland"],
-  ["NZ", "New Zealand"],
-  ["SE", "Sweden"],
-] as const;
+const COUNTRY_NAMES: Record<string, string> = {
+  US: "United States",
+  CA: "Canada",
+  GB: "United Kingdom",
+  AU: "Australia",
+  DE: "Germany",
+  FR: "France",
+  NL: "Netherlands",
+  IE: "Ireland",
+  NZ: "New Zealand",
+  SE: "Sweden",
+};
 
-export function CheckoutForm({ defaultEmail, defaultName }: { defaultEmail: string; defaultName: string }) {
+function newCheckoutKey(): string {
+  return typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+}
+
+export function CheckoutForm({ defaultEmail, defaultName, countries }: { defaultEmail: string; defaultName: string; countries: string[] }) {
   const cart = useCart();
   const [email, setEmail] = useState(defaultEmail);
-  const [addr, setAddr] = useState({ name: defaultName, line1: "", line2: "", city: "", state: "", postalCode: "", country: "US" });
+  const [addr, setAddr] = useState({ name: defaultName, line1: "", line2: "", city: "", state: "", postalCode: "", country: countries[0] ?? "US" });
+  // One key per checkout attempt: a double click or a retry after a slow network
+  // reuses the same order instead of creating a second one.
+  const [checkoutKey] = useState(newCheckoutKey);
   const [priced, setPriced] = useState<PricedCartView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, startSubmit] = useTransition();
@@ -59,7 +66,7 @@ export function CheckoutForm({ defaultEmail, defaultName }: { defaultEmail: stri
     e.preventDefault();
     setError(null);
     startSubmit(async () => {
-      const res = await startCheckoutAction({ items, shipTo: needsAddress ? addr : null, email });
+      const res = await startCheckoutAction({ items, shipTo: needsAddress ? addr : null, email, checkoutKey });
       if ("error" in res) setError(res.error);
       else window.location.href = res.url;
     });
@@ -99,9 +106,9 @@ export function CheckoutForm({ defaultEmail, defaultName }: { defaultEmail: stri
               </Field>
               <Field label="Country" htmlFor="country">
                 <Select id="country" autoComplete="country" value={addr.country} onChange={set("country")}>
-                  {COUNTRIES.map(([code, label]) => (
+                  {countries.map((code) => (
                     <option key={code} value={code}>
-                      {label}
+                      {COUNTRY_NAMES[code] ?? code}
                     </option>
                   ))}
                 </Select>
@@ -109,7 +116,7 @@ export function CheckoutForm({ defaultEmail, defaultName }: { defaultEmail: stri
             </div>
           </fieldset>
         ) : (
-          <Notice title="Digital order">Your files will be ready to download as soon as payment goes through. No address needed.</Notice>
+          <Notice title="Digital order: nothing ships">Your files will be ready to download on your order page as soon as payment is confirmed. No address needed.</Notice>
         )}
       </div>
 
