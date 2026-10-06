@@ -16,6 +16,7 @@ export const LIMITS = {
   upload: { max: 60, windowSeconds: 60 * 60 },
   report: { max: 10, windowSeconds: 60 * 60 },
   checkout: { max: 20, windowSeconds: 10 * 60 },
+  waitlist: { max: 10, windowSeconds: 60 * 60 },
 } as const;
 
 export type LimitName = keyof typeof LIMITS;

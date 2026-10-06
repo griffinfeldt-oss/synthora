@@ -1088,3 +1088,25 @@ model Subscriber {
   email     String   @unique
   createdAt DateTime @default(now())
 }
+
+enum WaitlistRole {
+  CREATOR
+  BUYER
+}
+
+// People who asked to hear when Synthora opens. Marketing only; never used for anything else.
+model WaitlistSignup {
+  id        String       @id @default(cuid())
+  email     String
+  role      WaitlistRole
+  // Creators: where their work can be seen (Instagram handle or a link).
+  portfolio String?
+  // Optional: what they make, or what they would buy.
+  note      String?
+  // Where they heard about Synthora (?ref= on the link, e.g. "ig-bio").
+  source    String?
+  createdAt DateTime     @default(now())
+
+  @@unique([email, role])
+  @@index([createdAt])
+}

@@ -83,7 +83,7 @@ export const LEGAL: Record<string, { title: string; updated: string; body: React
   },
   privacy: {
     title: "Privacy policy",
-    updated: "5 October 2026",
+    updated: "6 October 2026",
     body: (
       <>
         <h2>What we collect</h2>
@@ -92,6 +92,7 @@ export const LEGAL: Record<string, { title: string; updated: string; body: React
           <li>Orders: items, shipping address, email, and payment status. Card numbers are handled by Stripe; we never see or store them.</li>
           <li>Sellers: shop details, Stripe account identifiers, and partner API credentials, which we encrypt at rest (AES-256-GCM).</li>
           <li>Usage: server logs for security and debugging, including failed sign-ins and the network address they came from.</li>
+          <li>Waitlist: if you join our waitlist, your email, the link to your work (creators), any note you add, and which link brought you. We use it only to tell you about Synthora opening and to choose founding creators.</li>
           <li>Shopping activity: which product pages are viewed and when checkouts start, linked to a random visitor id stored in a first-party cookie, so we can understand what buyers want. We exclude our own staff and test traffic.</li>
         </ul>
         <h2>Who we share it with</h2>

@@ -15,6 +15,7 @@ const LINKS = [
   { href: "/admin/ledger", label: "Ledger" },
   { href: "/admin/reconciliation", label: "Reconciliation" },
   { href: "/admin/funnel", label: "Funnel" },
+  { href: "/admin/waitlist", label: "Waitlist" },
   { href: "/admin/readiness", label: "Readiness" },
   { href: "/admin/outbox", label: "Email outbox" },
 ];
