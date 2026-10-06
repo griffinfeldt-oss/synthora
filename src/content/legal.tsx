@@ -15,7 +15,7 @@ const countries = LAUNCH.territory.buyerCountries.join(", ");
 export const LEGAL: Record<string, { title: string; updated: string; body: ReactNode }> = {
   "seller-terms": {
     title: "Seller terms",
-    updated: "5 October 2026",
+    updated: "6 October 2026",
     body: (
       <>
         <p>These terms apply when you open a shop on Synthora (&ldquo;we&rdquo;, &ldquo;us&rdquo;). By creating a shop you agree to them and to the <Link href="/legal/buyer-terms">buyer terms</Link>, <Link href="/legal/privacy">privacy policy</Link> and <Link href="/legal/prohibited">prohibited items list</Link>.</p>
@@ -44,7 +44,7 @@ export const LEGAL: Record<string, { title: string; updated: string; body: React
         <h2>8. Suspension</h2>
         <p>We may approve, suspend or close shops and remove listings that break these terms, the prohibited items list or the law. We will tell you why unless we are legally unable to.</p>
         <h2>9. Taxes</h2>
-        <p>You are responsible for taxes on your income. Stripe may issue tax forms for payouts. Synthora does not add sales tax at checkout today; where the law requires a marketplace to collect it, we will do so before selling there and explain how it affects your listings.</p>
+        <p>You are responsible for taxes on your income. Stripe may issue tax forms for payouts. Synthora calculates sales tax at checkout and, as the marketplace, collects and pays it in the states where we are registered. Sales tax is added on top of your price, is never part of your earnings, and no commission is charged on it.</p>
         <h2>9a. Where we sell</h2>
         <p>For now we sell only to buyers in: {countries}.</p>
         <h2>9b. AI studio</h2>
@@ -56,14 +56,14 @@ export const LEGAL: Record<string, { title: string; updated: string; body: React
   },
   "buyer-terms": {
     title: "Buyer terms",
-    updated: "5 October 2026",
+    updated: "6 October 2026",
     body: (
       <>
         <p>Synthora is a marketplace. Items are made and sold by independent sellers; we run the checkout, hold payments and step in when something goes wrong.</p>
         <h2>1. AI-made products</h2>
         <p>Everything sold here is made with AI. Each listing tells you which tool was used and how. If a listing&apos;s disclosure is wrong, report it and we will investigate.</p>
         <h2>2. Paying</h2>
-        <p>You pay Synthora through Stripe. Your card details are entered on Stripe and never reach our servers. Prices are in US dollars and do not currently include sales tax. Shipping is quoted from each seller&apos;s fulfillment partner at checkout. For now we deliver only to: {countries}.</p>
+        <p>You pay Synthora through Stripe. Your card details are entered on Stripe and never reach our servers. Prices are in US dollars and do not include sales tax; where it applies, sales tax is calculated from your delivery address (or billing address for digital items) and shown on the payment page before you pay. Shipping is quoted from each seller&apos;s fulfillment partner at checkout. For now we deliver only to: {countries}.</p>
         <p>Your order is confirmed, and files unlock, only when Stripe confirms the payment. Some bank payments take a few days; we email you when they clear.</p>
         <h2>3. Made to order</h2>
         <p>Most physical items are produced after you order, so production times apply before shipping. Estimated delivery times are shown at checkout.</p>
