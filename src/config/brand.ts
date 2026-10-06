@@ -13,6 +13,12 @@ export const BRAND = {
   privacyEmail: `privacy@${domain}`,
   /** Prefix for human-readable order numbers, e.g. SYN-261005-7KQ4X. */
   orderPrefix: "SYN",
+  /** Social profiles; leave a value empty to hide its icon in the footer. */
+  social: {
+    instagram: "https://www.instagram.com/s.synthora/",
+    pinterest: "",
+    tiktok: "",
+  },
   /** Name of the built-in demo image model, shown as the AI tool on listings it makes. */
   studioName: "Synthora Studio",
 } as const;
